@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #102a43;
+  --navy-dark: #071a2b;
+  --navy-mid: #1f4e78;
+  --saffron: #d97706;
+  --offwhite: #f8fafc;
+  --ink: #172033;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-offwhite text-ink font-body antialiased;
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Thin decorative rule used by section eyebrows */
+.eyebrow-rule::before {
+  content: "";
+  display: inline-block;
+  width: 2rem;
+  height: 2px;
+  background: #d97706;
+  margin-right: 0.75rem;
+  vertical-align: middle;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Safe horizontal scrolling tables on mobile */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Shared form control styling */
+.input {
+  @apply block h-11 w-full rounded-lg border border-lightgray bg-white px-3.5 text-sm text-ink shadow-sm placeholder:text-muted/60 focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20;
+}
+
+textarea.input {
+  @apply h-auto py-2.5;
+}
+
+select.input {
+  @apply pr-8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
