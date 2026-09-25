@@ -1,6 +1,6 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
-export type StorageBucket = "gallery" | "audio" | "avatars";
+export type StorageBucket = "gallery" | "audio" | "avatars" | "media";
 
 export interface UploadHandle {
   path: string;
@@ -229,6 +229,22 @@ export async function uploadAvatar(
   });
 
   return { path, publicUrl: publicUrlFor("avatars", path), sizeBytes: blob.size, width, height };
+}
+
+/**
+ * Public progress-reporting upload used by the site-media manager as well as
+ * the gallery/audio uploaders. Thin wrapper over the authed XHR uploader.
+ */
+export async function uploadWithProgress(input: {
+  bucket: StorageBucket;
+  path: string;
+  body: Blob;
+  contentType: string;
+  upsert: boolean;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
+  requireConfigured();
+  await uploadWithProgressAuthed(input);
 }
 
 /** Removes the stored object. Called after the DB row is deleted. */

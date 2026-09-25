@@ -3,17 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --base: #080b14;
-  --surface: #101625;
-  --elevated: #151d31;
+  --base: #071015;
+  --surface: #0b1718;
+  --elevated: #111a25;
   --ink: #f7f8fc;
-  --muted: #98a3b8;
+  --muted: #9fb0bf;
   --line: rgba(247, 248, 252, 0.1);
-  --blue: #5e9fe8;
-  --cyan: #52d6e8;
-  --violet: #9b7cff;
-  --jade: #72bc8f;
-  --coral: #e97366;
+  --mint: #a8e6a3;
+  --jade: #9be7be;
+  --gold: #f3d58a;
+  --cream: #fff3cf;
+  --cyan: #78dce8;
+  --ocean: #56c9d6;
+  --sky: #8eb7ff;
+  --lavender: #a79bff;
+  --violet: #cfb6ff;
+  --coral: #f2a6a0;
   color-scheme: dark;
 }
 
@@ -24,18 +29,19 @@ html {
 
 body {
   @apply bg-base font-body text-ink antialiased;
-  /* Cinematic lighting: two very soft light pools, never a flat background. */
+  /* Cinematic lighting: botanical light pools on the left, atmospheric cyan on
+     the right — two moods sharing one canvas, never a flat background. */
   background-image:
-    radial-gradient(58rem 34rem at 12% -8%, rgba(94, 159, 232, 0.14), transparent 65%),
-    radial-gradient(46rem 30rem at 92% 4%, rgba(155, 124, 255, 0.12), transparent 62%),
-    radial-gradient(40rem 28rem at 50% 120%, rgba(82, 214, 232, 0.08), transparent 60%);
+    radial-gradient(56rem 34rem at 8% -10%, rgba(168, 230, 163, 0.13), transparent 64%),
+    radial-gradient(44rem 28rem at 94% 2%, rgba(120, 220, 232, 0.12), transparent 62%),
+    radial-gradient(40rem 26rem at 46% 118%, rgba(167, 155, 255, 0.1), transparent 60%);
   background-attachment: fixed;
   overflow-x: hidden;
 }
 
 /* Text selection reads as part of the design rather than a browser default. */
 ::selection {
-  background: rgba(94, 159, 232, 0.32);
+  background: rgba(168, 230, 163, 0.3);
   color: #ffffff;
 }
 
@@ -52,7 +58,7 @@ body {
   inset: 0;
   z-index: 60;
   pointer-events: none;
-  opacity: 0.14;
+  opacity: 0.12;
   mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -70,9 +76,28 @@ body {
     text-wrap: pretty;
   }
 
-  /* Editorial eyebrow: a hairline rule plus tracked-out caps. */
+  /* Editorial eyebrow: a hairline rule plus tracked-out caps. Tintable per mood. */
   .eyebrow {
     @apply inline-flex items-center gap-3 font-display text-2xs font-semibold uppercase tracking-[0.28em] text-cyan;
+  }
+
+  .eyebrow-mint {
+    @apply text-mint;
+  }
+  .eyebrow-mint::before {
+    @apply from-mint/10 via-mint to-mint/10;
+  }
+  .eyebrow-gold {
+    @apply text-gold;
+  }
+  .eyebrow-gold::before {
+    @apply from-gold/10 via-gold to-gold/10;
+  }
+  .eyebrow-violet {
+    @apply text-violet;
+  }
+  .eyebrow-violet::before {
+    @apply from-violet/10 via-violet to-violet/10;
   }
 
   .eyebrow::before {
@@ -140,6 +165,75 @@ body {
   .aura {
     @apply pointer-events-none absolute -z-10 rounded-full blur-[110px];
   }
+
+  /* Mood utility: tint a container's accents without restyling every child. */
+  .mood-mint {
+    @apply text-mint;
+  }
+  .mood-gold {
+    @apply text-gold;
+  }
+  .mood-cyan {
+    @apply text-cyan;
+  }
+  .mood-violet {
+    @apply text-violet;
+  }
+
+  /* Gradient text used for hero emphasis words. */
+  .text-gradient-mint {
+    @apply bg-gradient-to-r from-mint via-jade to-cyan bg-clip-text text-transparent;
+  }
+  .text-gradient-cyan {
+    @apply bg-gradient-to-r from-cyan via-sky to-lavender bg-clip-text text-transparent;
+  }
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-gold via-cream to-gold bg-clip-text text-transparent;
+  }
+}
+
+/* Scroll progress indicator pinned to the very top of the viewport. */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  z-index: 75;
+  background: linear-gradient(90deg, var(--mint), var(--cyan), var(--lavender));
+  transform-origin: 0 50%;
+  will-change: transform;
+}
+
+/* Floating particle field — pure CSS, GPU-friendly, hero-only. */
+.particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.particle {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(216, 245, 197, 0.9), rgba(168, 230, 163, 0));
+  animation: rise var(--rise-duration, 11s) linear infinite;
+  animation-delay: var(--rise-delay, 0s);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+@keyframes rise {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: var(--rise-opacity, 0.5);
+  }
+  100% {
+    transform: translate3d(var(--rise-x, 12px), -120vh, 0);
+    opacity: 0;
+  }
 }
 
 /* Slim, unobtrusive scrollbars inside scroll areas. */
@@ -167,12 +261,32 @@ body {
   scrollbar-width: none;
 }
 
+/* Blur-up loading for gallery imagery. */
+.blur-up {
+  filter: blur(14px);
+  transform: scale(1.04);
+  transition:
+    filter 0.7s ease,
+    transform 0.7s ease;
+}
+.blur-up.is-loaded {
+  filter: blur(0);
+  transform: scale(1);
+}
+
 /* Autofill in dark mode otherwise paints a white box over the input. */
 input:-webkit-autofill,
 input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--ink);
-  -webkit-box-shadow: 0 0 0 1000px #101625 inset;
+  -webkit-box-shadow: 0 0 0 1000px #0b1718 inset;
   transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Touch devices have no hover: never trap content behind hover-only reveals. */
+@media (hover: none) {
+  .hover-lift-fallback {
+    transform: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -189,5 +303,9 @@ input:-webkit-autofill:focus {
   }
   .grain-overlay {
     display: none;
+  }
+  .particles,
+  .particle {
+    display: none !important;
   }
 }

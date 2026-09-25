@@ -38,7 +38,9 @@ describe("application shell", () => {
 
     expect(screen.getByRole("link", { name: /Skip to main content/i })).toHaveAttribute("href", "#main");
     expect(screen.getByRole("link", { name: /Arian — home/i })).toHaveAttribute("href", "/");
-    expect(screen.getByText(/Demo mode\./)).toBeInTheDocument();
+    // Demo mode is dev-only now: the banner says "Local demo mode." and never
+    // appears in a production deployment without configuration.
+    expect(screen.getByText(/Local demo mode\./)).toBeInTheDocument();
   });
 
   it("keeps the assistant and music controls out of the way until asked for", async () => {

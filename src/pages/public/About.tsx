@@ -100,7 +100,7 @@ export default function About() {
       </div>
 
       {/* ------------------------------------------------------- what Arian makes */}
-      <Section aura="blue" ariaLabel="Content categories">
+      <Section aura="cyan" ariaLabel="Content categories">
         <SectionHeading
           eyebrow="What Arian makes"
           title="Six kinds of video, one idea behind all of them."

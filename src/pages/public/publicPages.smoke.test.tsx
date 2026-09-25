@@ -63,9 +63,14 @@ describe("public pages", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: /Every video, searchable/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Search videos/i)).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: /Filter by game/i })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: /Filter by category/i })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: /Sort videos/i })).toBeInTheDocument();
+    // Mobile-first toolbar: game and category are labelled native selects
+    // (role=combobox), sort is a labelled button group. Everything fits a
+    // 360px viewport with no horizontal scrolling.
+    expect(screen.getByRole("combobox", { name: "Game" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Category" })).toBeInTheDocument();
+    // Both sort groups (mobile + desktop variants) are in the DOM; CSS decides
+    // which one is visible at the current viewport width.
+    expect(screen.getAllByRole("group", { name: /Sort videos/i }).length).toBeGreaterThan(0);
   });
 
   it("renders the gallery with accessible image alternatives", async () => {

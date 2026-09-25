@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, LayoutDashboard, Menu, Radio, X, Youtube } from "lucide-react";
+import { ArrowUpRight, Images, LayoutDashboard, Menu, Radio, UserRound, X, Youtube } from "lucide-react";
 import { cn } from "../lib/utils";
 import { safeExternal } from "../lib/utils";
 import { youtubeChannelUrl } from "../lib/supabaseClient";
@@ -16,6 +16,7 @@ import { CursorGlow } from "../components/CursorGlow";
 import { PageTransition } from "../components/PageTransition";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { AssistantWidget } from "../components/Assistant";
+import { BackToTop, OfflineBanner, ScrollProgress } from "../components/SiteChrome";
 import { DEFAULT_SITE_CONTENT } from "../lib/siteContent";
 
 const NAV_LINKS = [
@@ -58,9 +59,11 @@ export default function PublicLayout() {
         Skip to main content
       </a>
 
+      <ScrollProgress />
       <CursorGlow />
       <div className="grain-overlay" aria-hidden />
 
+      <OfflineBanner />
       <ConfigBanner />
 
       {announcement && !announcementDismissed && (
@@ -108,13 +111,33 @@ export default function PublicLayout() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {/* Mobile: the important actions stay visible without the menu. */}
+            <ButtonLink
+              to="/gallery"
+              variant="ghost"
+              size="sm"
+              className="px-2.5 lg:hidden"
+              aria-label="Open the gallery"
+            >
+              <Images className="h-4 w-4" aria-hidden />
+            </ButtonLink>
+            <ButtonLink
+              to={session ? dashboardPath : "/login"}
+              variant="ghost"
+              size="sm"
+              className="px-2.5 lg:hidden"
+              aria-label={session ? "Open your dashboard" : "Client login"}
+            >
+              <UserRound className="h-4 w-4" aria-hidden />
+            </ButtonLink>
+
             {session ? (
-              <ButtonLink to={dashboardPath} variant="secondary" size="sm" className="hidden sm:inline-flex">
+              <ButtonLink to={dashboardPath} variant="secondary" size="sm" className="hidden lg:inline-flex">
                 <LayoutDashboard className="h-3.5 w-3.5" aria-hidden />
                 {profile?.role === "admin" ? "Studio" : "Dashboard"}
               </ButtonLink>
             ) : (
-              <ButtonLink to="/login" variant="ghost" size="sm" className="hidden sm:inline-flex">
+              <ButtonLink to="/login" variant="ghost" size="sm" className="hidden lg:inline-flex">
                 Sign in
               </ButtonLink>
             )}
@@ -165,19 +188,20 @@ export default function PublicLayout() {
                   ))}
                 </ul>
                 <div className="mt-4 grid grid-cols-2 gap-2 border-t border-hairline pt-4">
+                  <ButtonLink to="/sponsor" variant="outline" className="w-full">
+                    Sponsor
+                  </ButtonLink>
+                  <ButtonLink to="/gallery" variant="outline" className="w-full">
+                    Gallery
+                  </ButtonLink>
                   {session ? (
-                    <ButtonLink to={dashboardPath} variant="outline" className="w-full">
-                      {profile?.role === "admin" ? "Studio" : "Dashboard"}
+                    <ButtonLink to={dashboardPath} variant="secondary" className="col-span-2 w-full">
+                      {profile?.role === "admin" ? "Open the studio" : "Client dashboard"}
                     </ButtonLink>
                   ) : (
-                    <>
-                      <ButtonLink to="/login" variant="outline" className="w-full">
-                        Sign in
-                      </ButtonLink>
-                      <ButtonLink to="/signup" variant="secondary" className="w-full">
-                        Create account
-                      </ButtonLink>
-                    </>
+                    <ButtonLink to="/login" variant="secondary" className="col-span-2 w-full">
+                      Client login
+                    </ButtonLink>
                   )}
                   <ButtonLink to={channelUrl} external className="col-span-2 w-full">
                     <Youtube className="h-4 w-4" aria-hidden />
@@ -309,6 +333,30 @@ export default function PublicLayout() {
         </div>
       </footer>
 
+      {/* Compact mobile bottom action bar: sponsor, gallery, login always live. */}
+      <nav
+        aria-label="Quick actions"
+        className="glass fixed inset-x-3 bottom-3 z-[55] flex items-center justify-around rounded-2xl px-2 py-2 shadow-lift sm:hidden"
+      >
+        {[
+          { to: "/sponsor", label: "Sponsor", icon: "🤝" },
+          { to: "/gallery", label: "Gallery", icon: "🖼️" },
+          { to: session ? dashboardPath : "/login", label: session ? "Dashboard" : "Client", icon: "👤" },
+        ].map((action) => (
+          <Link
+            key={action.to}
+            to={action.to}
+            className="flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-4 py-1.5 text-2xs font-semibold text-muted transition-colors hover:text-ink"
+          >
+            <span aria-hidden className="text-base leading-none">
+              {action.icon}
+            </span>
+            {action.label}
+          </Link>
+        ))}
+      </nav>
+
+      <BackToTop />
       <AudioPlayer />
       <AssistantWidget
         intro={content.chatbotIntro}

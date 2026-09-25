@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   BarChart3,
   ChevronLeft,
+  Clapperboard,
   Home,
   Images,
   Inbox,
@@ -40,6 +41,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: "/admin/gallery", label: "Gallery", icon: Images },
   { to: "/admin/videos", label: "Videos", icon: Video },
   { to: "/admin/audio", label: "Audio", icon: Music4 },
+  { to: "/admin/media", label: "Background media", icon: Clapperboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/messages", label: "Messages", icon: Inbox },
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },

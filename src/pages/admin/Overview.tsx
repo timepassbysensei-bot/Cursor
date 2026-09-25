@@ -22,6 +22,7 @@ import { PageHeader, StatTile } from "../../components/PageHeader";
 import { Badge, Panel } from "../../components/ui/Section";
 import { ErrorState, LoadingState, EmptyState } from "../../components/ui/States";
 import { ButtonLink } from "../../components/ui/Button";
+import { SetupWarning } from "../../components/ConfigBanner";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 
 export default function AdminOverview() {
@@ -70,6 +71,8 @@ export default function AdminOverview() {
           </>
         }
       />
+
+      <SetupWarning />
 
       {DEMO_MODE && (
         <div className="mb-6 rounded-2xl border border-blue/25 bg-blue/[0.07] p-4 text-sm leading-relaxed text-muted" role="status">

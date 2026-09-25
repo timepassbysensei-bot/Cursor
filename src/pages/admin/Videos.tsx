@@ -82,8 +82,9 @@ export default function AdminVideos() {
         youtube_url: youtubeWatchUrl(youtubeId),
         youtube_id: youtubeId,
         // Thumbnails come from YouTube's documented pattern; the admin never
-        // has to paste an image URL.
-        thumbnail_url: youtubeThumbnail(youtubeId, "hqdefault"),
+        // has to paste an image URL. The card falls back to hqdefault at
+        // render time when maxres does not exist for an older video.
+        thumbnail_url: youtubeThumbnail(youtubeId, "maxresdefault"),
         title: values.title,
         description: values.description || null,
         game: values.game || null,
@@ -208,6 +209,12 @@ export default function AdminVideos() {
   };
 
   const derivedId = form ? extractYouTubeId(form.youtube_url) : null;
+  // Real-time inline error: only when the admin has typed something that does
+  // not parse as a YouTube link, so an empty field stays quiet.
+  const urlError =
+    form && form.youtube_url.trim().length > 0 && derivedId === null
+      ? "That does not look like a YouTube link."
+      : null;
 
   return (
     <div>
@@ -390,7 +397,7 @@ export default function AdminVideos() {
             <Field
               label="YouTube link"
               htmlFor="video-url"
-              error={fieldErrors.youtube_url}
+              error={fieldErrors.youtube_url ?? urlError}
               hint="watch?v=…, youtu.be/…, /shorts/… or just the 11-character id."
               required
             >
@@ -406,7 +413,7 @@ export default function AdminVideos() {
             {derivedId && (
               <div className="flex items-center gap-3 rounded-xl border border-hairline bg-white/[0.02] p-3">
                 <img
-                  src={youtubeThumbnail(derivedId, "hqdefault")}
+                  src={youtubeThumbnail(derivedId, "maxresdefault")}
                   alt=""
                   className="h-14 w-24 rounded-lg border border-hairline object-cover"
                 />

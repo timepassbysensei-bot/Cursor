@@ -38,6 +38,7 @@ const AdminOverview = lazy(() => import("./pages/admin/Overview"));
 const AdminGallery = lazy(() => import("./pages/admin/Gallery"));
 const AdminVideos = lazy(() => import("./pages/admin/Videos"));
 const AdminAudio = lazy(() => import("./pages/admin/Audio"));
+const AdminMedia = lazy(() => import("./pages/admin/Media"));
 const AdminClients = lazy(() => import("./pages/admin/Clients"));
 const AdminMessages = lazy(() => import("./pages/admin/Messages"));
 const AdminBroadcasts = lazy(() => import("./pages/admin/Broadcasts"));
@@ -103,6 +104,7 @@ export default function App() {
               <Route path="gallery" element={<AdminGallery />} />
               <Route path="videos" element={<AdminVideos />} />
               <Route path="audio" element={<AdminAudio />} />
+              <Route path="media" element={<AdminMedia />} />
               <Route path="clients" element={<AdminClients />} />
               <Route path="messages" element={<AdminMessages />} />
               <Route path="broadcasts" element={<AdminBroadcasts />} />

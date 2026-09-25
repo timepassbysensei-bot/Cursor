@@ -1,8 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { GalleryItem } from "../types";
+
+/** Gallery tile image with blur-up loading: starts blurred, unblurs once decoded. */
+function BlurUpImage({ item }: { item: GalleryItem }) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <img
+      src={item.public_url}
+      alt={item.alt_text}
+      loading="lazy"
+      decoding="async"
+      width={item.width ?? undefined}
+      height={item.height ?? undefined}
+      onLoad={() => setLoaded(true)}
+      className={cn(
+        "blur-up w-full object-cover transition-transform duration-[900ms] ease-editorial group-hover:scale-[1.05]",
+        loaded && "is-loaded"
+      )}
+    />
+  );
+}
 
 /**
  * Editorial masonry built on CSS columns: no layout library, no JS measuring,
@@ -29,15 +50,7 @@ export function GalleryGrid({
           aria-label={`Open image: ${item.title || item.alt_text}`}
         >
           <div className="relative overflow-hidden">
-            <img
-              src={item.public_url}
-              alt={item.alt_text}
-              loading="lazy"
-              decoding="async"
-              width={item.width ?? undefined}
-              height={item.height ?? undefined}
-              className="w-full object-cover transition-transform duration-[900ms] ease-editorial group-hover:scale-[1.05]"
-            />
+            <BlurUpImage item={item} />
             <span
               aria-hidden
               className="pointer-events-none absolute inset-0 bg-gradient-to-t from-base/85 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
@@ -73,6 +86,7 @@ export function Lightbox({
   const reduced = useReducedMotion();
   const open = index !== null;
   const panelRef = useRef<HTMLDivElement>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const item = useMemo(() => (index === null ? null : items[index] ?? null), [items, index]);
 
@@ -83,6 +97,24 @@ export function Lightbox({
     },
     [index, items.length, onIndexChange]
   );
+
+  const onTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    // Horizontal swipe: clearly horizontal and long enough to be intentional.
+    if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 2) {
+      go(dx < 0 ? 1 : -1);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -137,6 +169,8 @@ export function Lightbox({
             role="dialog"
             aria-modal="true"
             aria-label={item.title || "Gallery image viewer"}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
             className="relative flex min-h-0 flex-1 items-center justify-center px-3 pb-3 outline-none sm:px-16"
           >
             <motion.img

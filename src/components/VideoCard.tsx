@@ -1,32 +1,39 @@
+import { ExternalLink, ImageOff, Play } from "lucide-react";
 import { useState } from "react";
-import { ExternalLink, Play } from "lucide-react";
 import { cn, formatDate } from "../lib/utils";
-import { placeholderArt } from "../lib/placeholderArt";
 import { extractYouTubeId, youtubeThumbnail, youtubeWatchUrl } from "../lib/youtube";
 import { Badge } from "./ui/Section";
 import type { Video } from "../types";
 
+const NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Resolves the best available thumbnail and degrades gracefully:
- * maxres → hq → generated artwork. A blank grey box is never shown, and the
- * chain always terminates because step 2 ignores the network entirely.
+ * Resolves the best available real thumbnail and degrades gracefully:
+ * maxres → hq → "thumbnail unavailable" state. A generated fake image is
+ * never shown for a real video; a real database video without a working
+ * thumbnail gets an honest, designed fallback block.
  */
 function useThumbnail(video: Video) {
   const youtubeId = video.youtube_id || extractYouTubeId(video.youtube_url) || "";
   const primary = video.thumbnail_url || (youtubeId ? youtubeThumbnail(youtubeId, "maxresdefault") : "");
   const backup = youtubeId ? youtubeThumbnail(youtubeId, "hqdefault") : "";
-  const generated = placeholderArt(video.id || video.title || "video", 1280, 720);
   const [step, setStep] = useState(0);
 
-  const candidates = [primary, backup, generated].filter((value) => Boolean(value)) as string[];
-  const safeStep = Math.min(step, Math.max(0, candidates.length - 1));
-  const src = candidates[safeStep] ?? generated;
+  const candidates = [primary, backup].filter((value) => Boolean(value)) as string[];
+  const exhausted = candidates.length === 0 || step >= candidates.length;
+  const src = exhausted ? "" : candidates[Math.min(step, candidates.length - 1)];
 
   return {
     src,
-    isGenerated: safeStep === candidates.length - 1,
-    onError: () => setStep((current) => Math.min(candidates.length - 1, current + 1)),
+    unavailable: exhausted,
+    onError: () => setStep((current) => current + 1),
   };
+}
+
+function isRecent(publishedAt: string): boolean {
+  const parsed = Date.parse(publishedAt);
+  if (Number.isNaN(parsed)) return false;
+  return Date.now() - parsed < NEW_WINDOW_MS;
 }
 
 export function VideoCard({
@@ -40,29 +47,44 @@ export function VideoCard({
 }) {
   const youtubeId = video.youtube_id || extractYouTubeId(video.youtube_url) || "";
   const isPlayable = Boolean(youtubeId);
-  const { src, isGenerated, onError } = useThumbnail(video);
+  const { src, unavailable, onError } = useThumbnail(video);
   const featured = variant === "feature";
 
-  const inner = (
-    <>
+  return (
+    <article
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface/70 transition-all duration-500 ease-editorial",
+        isPlayable && "hover:-translate-y-1 hover:border-white/20 hover:shadow-glow",
+        className
+      )}
+    >
       <div
         className={cn(
-          "relative overflow-hidden",
+          "relative overflow-hidden bg-elevated",
           featured ? "aspect-[16/10] sm:aspect-[16/9]" : "aspect-video"
         )}
       >
-        <img
-          src={src}
-          alt=""
-          loading={featured ? "eager" : "lazy"}
-          decoding="async"
-          onError={onError}
-          className={cn(
-            "h-full w-full object-cover transition-transform duration-[900ms] ease-editorial",
-            isPlayable && "group-hover:scale-[1.045]",
-            isGenerated && "opacity-90"
-          )}
-        />
+        {unavailable ? (
+          <div
+            aria-hidden
+            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-surface via-elevated to-base text-faint"
+          >
+            <ImageOff className="h-6 w-6" />
+            <span className={cn("font-display", featured ? "text-xs" : "text-2xs")}>Thumbnail unavailable</span>
+          </div>
+        ) : (
+          <img
+            src={src}
+            alt=""
+            loading={featured ? "eager" : "lazy"}
+            decoding="async"
+            onError={onError}
+            className={cn(
+              "h-full w-full object-cover transition-transform duration-[900ms] ease-editorial",
+              isPlayable && "group-hover:scale-[1.045]"
+            )}
+          />
+        )}
 
         <span
           aria-hidden
@@ -79,9 +101,9 @@ export function VideoCard({
         )}
 
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-          {video.game && <Badge tone="blue">{video.game}</Badge>}
+          {video.game && <Badge tone="ocean">{video.game}</Badge>}
           {video.is_featured && <Badge tone="violet">Featured</Badge>}
-          {!isPlayable && <Badge tone="neutral">Sample</Badge>}
+          {!featured && isRecent(video.published_at) && <Badge tone="mint">New</Badge>}
         </div>
 
         {video.duration_text && (
@@ -113,39 +135,38 @@ export function VideoCard({
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs uppercase tracking-[0.14em] text-faint">
-          {video.category && <span className="text-cyan">{video.category}</span>}
+          {video.category && <span className="text-jade">{video.category}</span>}
           <span>{formatDate(video.published_at)}</span>
-          {isPlayable && (
-            <span className="ml-auto inline-flex items-center gap-1 text-muted transition-colors group-hover:text-ink">
-              Watch on YouTube
-              <ExternalLink className="h-3 w-3" aria-hidden />
-            </span>
-          )}
         </div>
+
+        {/* Explicit, always-available watch link. The stretched overlay below
+            makes the whole card clickable, but this link stays on top and
+            works independently — the two never conflict. */}
+        {isPlayable && (
+          <a
+            href={youtubeWatchUrl(youtubeId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative z-20 mt-4 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-hairline px-4 py-2.5 font-display text-xs font-semibold text-ink transition-colors hover:border-coral/60 hover:bg-coral/[0.08]"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            Watch on YouTube
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        )}
       </div>
-    </>
-  );
 
-  const classes = cn(
-    "group flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface/70 transition-all duration-500 ease-editorial",
-    isPlayable && "hover:-translate-y-1 hover:border-white/20 hover:shadow-glow",
-    className
-  );
-
-  // Without a real YouTube link the card is not clickable — no dead links.
-  if (!isPlayable) {
-    return <article className={classes}>{inner}</article>;
-  }
-
-  return (
-    <a
-      href={youtubeWatchUrl(youtubeId)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={classes}
-      aria-label={`${video.title} — opens on YouTube in a new tab`}
-    >
-      {inner}
-    </a>
+      {/* Stretched-link overlay: the whole card opens the video. Skipped when
+          there is no real link, so nothing pretends to be clickable. */}
+      {isPlayable && (
+        <a
+          href={youtubeWatchUrl(youtubeId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute inset-0 z-10 rounded-2xl"
+          aria-label={`${video.title} — opens on YouTube in a new tab`}
+        />
+      )}
+    </article>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Bot, CheckCircle2, Loader2, Mail, MessageSquare, ShieldCheck } from "lucide-react";
+import { Bot, Check, CheckCircle2, Copy, Loader2, Mail, MessageSquare, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSeo } from "../../hooks/useSeo";
 import { useSiteContent } from "../../hooks/useSiteContent";
@@ -18,6 +18,7 @@ import { Reveal } from "../../components/Reveal";
 export default function Contact() {
   const { data: content = DEFAULT_SITE_CONTENT } = useSiteContent();
   const [sent, setSent] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   useSeo({
@@ -231,12 +232,30 @@ export default function Contact() {
               <Panel className="p-6">
                 <Mail className="h-5 w-5 text-jade" aria-hidden />
                 <h2 className="mt-4 font-display text-base font-semibold text-ink">Business enquiries</h2>
-                <a
-                  href={`mailto:${content.contactEmail}`}
-                  className="mt-2 inline-block break-all text-sm font-semibold text-cyan underline-offset-2 hover:underline"
-                >
-                  {content.contactEmail}
-                </a>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <a
+                    href={`mailto:${content.contactEmail}`}
+                    className="break-all text-sm font-semibold text-cyan underline-offset-2 hover:underline"
+                  >
+                    {content.contactEmail}
+                  </a>
+                  <button
+                    type="button"
+                    aria-label={`Copy ${content.contactEmail} to clipboard`}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-hairline text-muted transition-colors hover:border-jade/50 hover:bg-jade/[0.06] hover:text-jade"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(content.contactEmail ?? "");
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 1600);
+                      } catch {
+                        setCopied(false);
+                      }
+                    }}
+                  >
+                    {copied ? <Check className="h-4 w-4 text-jade" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+                  </button>
+                </div>
               </Panel>
             )}
 

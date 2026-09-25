@@ -4,11 +4,17 @@ import { DEFAULT_SITE_CONTENT, mergeSiteContent } from "../lib/siteContent";
 import type { AudioTrack, Broadcast, GalleryItem, SiteContent, SiteContentRow, Video } from "../types";
 
 /**
- * Demo mode is the state before Supabase is connected. Public pages render
- * sample content and a banner explaining it, instead of a wall of empty
- * sections or network errors.
+ * Demo mode exists **only** in local development (`import.meta.env.DEV`) or
+ * when an admin explicitly opts in with `VITE_DEMO_MODE=1`. Production with a
+ * missing database never shows fake content: it shows honest empty states.
  */
-export const DEMO_MODE = !isSupabaseConfigured;
+export const DEMO_MODE = !isSupabaseConfigured && import.meta.env.DEV;
+
+/**
+ * True when the app has no database but is NOT in dev demo mode — the
+ * production-misconfigured state. Pages render real empty states instead.
+ */
+export const NOT_CONFIGURED = !isSupabaseConfigured;
 
 export const NOT_CONNECTED_MESSAGE =
   "This site is not connected to its database yet, so nothing was sent. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then reload.";
@@ -42,7 +48,8 @@ export async function fetchSiteContent(): Promise<SiteContent> {
 
 /** Newest first, with Arian's manual ordering taking priority within a group. */
 export async function fetchPublishedVideos(): Promise<Video[]> {
-  if (!isSupabaseConfigured) return DEMO_VIDEOS;
+  if (DEMO_MODE) return DEMO_VIDEOS;
+  if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
     .from("videos")
     .select(VIDEO_COLUMNS)
@@ -57,7 +64,8 @@ export async function fetchPublishedVideos(): Promise<Video[]> {
 }
 
 export async function fetchFeaturedVideo(): Promise<Video | null> {
-  if (!isSupabaseConfigured) return DEMO_VIDEOS.find((v) => v.is_featured) ?? DEMO_VIDEOS[0] ?? null;
+  if (DEMO_MODE) return DEMO_VIDEOS.find((v) => v.is_featured) ?? DEMO_VIDEOS[0] ?? null;
+  if (!isSupabaseConfigured) return null;
   const { data, error } = await supabase
     .from("videos")
     .select(VIDEO_COLUMNS)
@@ -74,7 +82,8 @@ export async function fetchFeaturedVideo(): Promise<Video | null> {
 }
 
 export async function fetchPublishedGallery(): Promise<GalleryItem[]> {
-  if (!isSupabaseConfigured) return DEMO_GALLERY;
+  if (DEMO_MODE) return DEMO_GALLERY;
+  if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
     .from("gallery_items")
     .select(GALLERY_COLUMNS)

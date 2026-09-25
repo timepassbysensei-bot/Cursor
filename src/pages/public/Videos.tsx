@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, Youtube } from "lucide-react";
+import { Search, Youtube } from "lucide-react";
 import { useSeo } from "../../hooks/useSeo";
 import { useSiteContent } from "../../hooks/useSiteContent";
 import { fetchPublishedVideos } from "../../services/content";
@@ -9,7 +9,7 @@ import { GAMES, VIDEO_CATEGORIES } from "../../lib/options";
 import { cn, safeExternal } from "../../lib/utils";
 import { youtubeChannelUrl } from "../../lib/supabaseClient";
 import { Button, ButtonLink } from "../../components/ui/Button";
-import { FilterChips, Badge } from "../../components/ui/Section";
+import { Badge, FilterSelect } from "../../components/ui/Section";
 import { EmptyState, ErrorState, SkeletonGrid } from "../../components/ui/States";
 import { RevealGroup, RevealItem, Reveal } from "../../components/Reveal";
 import { VideoCard } from "../../components/VideoCard";
@@ -64,11 +64,17 @@ export default function Videos() {
   const activeFilters = (game !== "All" ? 1 : 0) + (category !== "All" ? 1 : 0) + (query ? 1 : 0);
   const channelUrl = safeExternal(content.socialYouTube) ?? youtubeChannelUrl;
 
+  const clearFilters = () => {
+    setQuery("");
+    setGame("All");
+    setCategory("All");
+  };
+
   return (
     <div className="shell py-14 sm:py-20">
       <Reveal>
         <header className="max-w-3xl">
-          <p className="eyebrow mb-5">Video library</p>
+          <p className="eyebrow eyebrow-mint mb-5">Video library</p>
           <h1 className="font-display text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink text-balance sm:text-5xl">
             Every video, searchable.
           </h1>
@@ -79,12 +85,13 @@ export default function Videos() {
         </header>
       </Reveal>
 
-      {/* Toolbar */}
+      {/* Toolbar — every control is a grid child on phones, so nothing can
+          overflow the 360px viewport. Native selects give the platform picker. */}
       <Reveal delay={0.08}>
         <div className="panel mt-10 p-5 sm:p-6">
           <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+            <div className="grid grid-cols-1 gap-3">
+              <div className="relative">
                 <Search
                   className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
                   aria-hidden
@@ -98,12 +105,34 @@ export default function Videos() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search titles and descriptions…"
-                  className="input pl-10"
+                  className="input min-w-0 pl-10"
                 />
               </div>
 
-              <div className="flex items-center gap-2" role="group" aria-label="Sort videos">
-                <SlidersHorizontal className="h-4 w-4 shrink-0 text-faint" aria-hidden />
+              <div className="grid grid-cols-2 gap-3 sm:hidden" role="group" aria-label="Sort videos">
+                {SORTS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSort(option.key)}
+                    aria-pressed={sort === option.key}
+                    className={cn(
+                      "min-h-[44px] rounded-xl border px-3 text-xs font-semibold transition-colors",
+                      sort === option.key
+                        ? "border-cyan/50 bg-cyan/[0.12] text-ink"
+                        : "border-hairline bg-white/[0.02] text-muted"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="hidden items-center gap-2 sm:flex"
+                role="group"
+                aria-label="Sort videos"
+              >
                 {SORTS.map((option) => (
                   <button
                     key={option.key}
@@ -123,25 +152,21 @@ export default function Videos() {
               </div>
             </div>
 
-            <div className="grid gap-3 border-t border-hairline pt-5 sm:grid-cols-2">
-              <div>
-                <p className="mb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-faint">Game</p>
-                <FilterChips
-                  label="Filter by game"
-                  options={["All", ...GAMES]}
-                  value={game}
-                  onChange={setGame}
-                />
-              </div>
-              <div>
-                <p className="mb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-faint">Category</p>
-                <FilterChips
-                  label="Filter by category"
-                  options={["All", ...VIDEO_CATEGORIES]}
-                  value={category}
-                  onChange={setCategory}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 border-t border-hairline pt-5 sm:grid-cols-2">
+              <FilterSelect
+                id="filter-game"
+                label="Game"
+                options={["All", ...GAMES]}
+                value={game}
+                onChange={setGame}
+              />
+              <FilterSelect
+                id="filter-category"
+                label="Category"
+                options={["All", ...VIDEO_CATEGORIES]}
+                value={category}
+                onChange={setCategory}
+              />
             </div>
           </div>
         </div>
@@ -157,11 +182,7 @@ export default function Videos() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setQuery("");
-                setGame("All");
-                setCategory("All");
-              }}
+              onClick={clearFilters}
             >
               Clear filters
             </Button>
@@ -183,25 +204,31 @@ export default function Videos() {
             onRetry={() => void refetch()}
           />
         ) : videos.length === 0 ? (
-          <EmptyState
-            icon={<Youtube className="h-5 w-5 text-faint" aria-hidden />}
-            title="No videos published yet"
-            hint="Once Arian adds videos in the studio, they show up here with filters and search."
-          />
+          <div className="relative overflow-hidden rounded-3xl border border-hairline bg-surface/60 px-6 py-16 text-center">
+            <span aria-hidden className="aura left-1/2 top-[-6rem] h-56 w-[30rem] -translate-x-1/2 bg-mint/18" />
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-hairline bg-white/[0.04]">
+              <Youtube className="h-6 w-6 text-jade" aria-hidden />
+            </span>
+            <h2 className="mt-5 font-display text-xl font-semibold text-ink">
+              Arian's next video will appear here.
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted">
+              Nothing has been published yet. The moment a video goes live it shows up here — with its real
+              thumbnail, game and category.
+            </p>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <ButtonLink to={channelUrl} external>
+                <Youtube className="h-4 w-4" aria-hidden />
+                Open Arian's YouTube channel
+              </ButtonLink>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
           <EmptyState
             title="Nothing matches those filters"
             hint="Try clearing the filters or searching for a different title."
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setQuery("");
-                  setGame("All");
-                  setCategory("All");
-                }}
-              >
+              <Button variant="outline" size="sm" onClick={clearFilters}>
                 Clear filters
               </Button>
             }
