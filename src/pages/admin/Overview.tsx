@@ -1,141 +1,270 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
-  Users,
-  GraduationCap,
-  Inbox,
-  CalendarRange,
-  Megaphone,
-  Trophy,
   ArrowRight,
-  TrendingUp,
+  Ban,
+  Clock,
+  Handshake,
+  Images,
+  Inbox,
+  Music4,
+  Plus,
+  UserCheck,
+  Users,
+  Video,
 } from "lucide-react";
-import { PageHeader } from "../../features/admin/PageHeader";
-import { Card, Badge } from "../../components/ui/Section";
-import { LoadingState, ErrorState, EmptyState } from "../../components/ui/States";
+import { useAuth } from "../../hooks/useAuth";
+import { useSeo } from "../../hooks/useSeo";
 import { adminService } from "../../services/admin";
-import { supabase } from "../../lib/supabaseClient";
-import { formatDate } from "../../lib/utils";
-
-async function count(table: string, filters: Record<string, string> = {}): Promise<number> {
-  let q = supabase.from(table).select("id", { count: "exact", head: true });
-  for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
-  const { count, error } = await q;
-  if (error) throw error;
-  return count ?? 0;
-}
+import { DEMO_MODE, isMissingRelation } from "../../services/content";
+import { formatDateTime, formatRelative, truncate } from "../../lib/utils";
+import { PageHeader, StatTile } from "../../components/PageHeader";
+import { Badge, Panel } from "../../components/ui/Section";
+import { ErrorState, LoadingState, EmptyState } from "../../components/ui/States";
+import { ButtonLink } from "../../components/ui/Button";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
 
 export default function AdminOverview() {
-  const studentsQ = useQuery({ queryKey: ["ov", "students"], queryFn: () => count("profiles", { role: "student" }) });
-  const teachersQ = useQuery({ queryKey: ["ov", "teachers"], queryFn: () => count("profiles", { role: "teacher" }) });
-  const batchesQ = useQuery({ queryKey: ["ov", "batches"], queryFn: () => count("batches", { status: "ongoing" }) });
-  const newInqQ = useQuery({ queryKey: ["ov", "inq-new"], queryFn: () => count("inquiries", { status: "new" }) });
-  const totalInqQ = useQuery({ queryKey: ["ov", "inq-all"], queryFn: () => count("inquiries") });
-  const noticesQ = useQuery({ queryKey: ["ov", "notices"], queryFn: () => count("notices", { status: "published" }) });
-  const achievementsQ = useQuery({ queryKey: ["ov", "ach"], queryFn: () => count("achievements", { status: "published" }) });
-  const recentInqQ = useQuery({ queryKey: ["admin", "inquiries"], queryFn: () => adminService.inquiries() });
+  const { profile } = useAuth();
 
-  const cards = [
-    { to: "/admin/students", label: "Students", value: studentsQ.data, icon: Users, tone: "navy" as const },
-    { to: "/admin/teachers", label: "Teachers", value: teachersQ.data, icon: GraduationCap, tone: "navy" as const },
-    { to: "/admin/batches", label: "Ongoing batches", value: batchesQ.data, icon: CalendarRange, tone: "green" as const },
-    { to: "/admin/inquiries", label: "New inquiries", value: newInqQ.data, icon: Inbox, tone: "saffron" as const },
-    { to: "/admin/notices", label: "Published notices", value: noticesQ.data, icon: Megaphone, tone: "navy" as const },
-    { to: "/admin/achievements", label: "Published results", value: achievementsQ.data, icon: Trophy, tone: "green" as const },
-  ];
+  useSeo({ title: "Studio overview — Arian", noIndex: true, description: "Admin overview." });
+
+  const overviewQuery = useQuery({
+    queryKey: ["admin-overview"],
+    queryFn: () => adminService.overview(),
+    enabled: isSupabaseConfigured,
+  });
+
+  const messagesQuery = useQuery({
+    queryKey: ["admin-messages", "recent"],
+    queryFn: () => adminService.messages(),
+    enabled: isSupabaseConfigured,
+  });
+
+  const auditQuery = useQuery({
+    queryKey: ["admin-audit-logs"],
+    queryFn: () => adminService.auditLogs(),
+    enabled: isSupabaseConfigured,
+    retry: (count, error) => count < 1 && !isMissingRelation(error),
+  });
+
+  const overview = overviewQuery.data;
+  const recentMessages = (messagesQuery.data ?? []).slice(0, 5);
 
   return (
     <div>
       <PageHeader
-        title="Overview"
-        description="Live snapshot of the academy — numbers come straight from the database."
+        eyebrow="Studio"
+        title={`Hello${profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
+        description="Everything on the public site is managed from here: videos, gallery, audio, clients, the inbox and broadcasts."
+        actions={
+          <>
+            <ButtonLink to="/admin/videos" size="sm">
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Add a video
+            </ButtonLink>
+            <ButtonLink to="/admin/gallery" variant="outline" size="sm">
+              <Images className="h-3.5 w-3.5" aria-hidden />
+              Upload images
+            </ButtonLink>
+          </>
+        }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
-          <Link key={c.label} to={c.to} className="group">
-            <Card className="flex items-center gap-4 p-5 transition-shadow group-hover:shadow-lift">
-              <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-                c.tone === "saffron" ? "bg-saffron/10 text-saffron" : c.tone === "green" ? "bg-green-success/10 text-green-success" : "bg-navy/[0.07] text-navy"
-              }`}>
-                <c.icon className="h-6 w-6" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{c.label}</p>
-                {c.value === undefined ? (
-                  <div className="mt-1 h-7 w-12 animate-pulse rounded bg-lightgray" aria-hidden />
+      {DEMO_MODE && (
+        <div className="mb-6 rounded-2xl border border-blue/25 bg-blue/[0.07] p-4 text-sm leading-relaxed text-muted" role="status">
+          <p className="font-display font-semibold text-ink">Demo mode — no database connected</p>
+          <p className="mt-1">
+            Counts and lists stay empty until <code>VITE_SUPABASE_URL</code> and{" "}
+            <code>VITE_SUPABASE_ANON_KEY</code> are set and the Supabase migrations are applied. Public pages show
+            sample content in the meantime.
+          </p>
+        </div>
+      )}
+
+      {overviewQuery.isLoading ? (
+        <LoadingState label="Counting everything…" />
+      ) : overviewQuery.isError ? (
+        <ErrorState
+          title="The overview could not load"
+          hint={
+            isMissingRelation((overviewQuery.error as { message?: string }) ?? {})
+              ? "The database tables are missing. Run the migrations in supabase/migrations."
+              : "Something went wrong reading the counts."
+          }
+          onRetry={() => void overviewQuery.refetch()}
+        />
+      ) : overview ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile
+              label="Registered clients"
+              value={overview.totalClients}
+              hint="All client accounts"
+              icon={<Users className="h-4 w-4" aria-hidden />}
+              tone="blue"
+            />
+            <StatTile
+              label="Pending requests"
+              value={overview.pendingClients}
+              hint={overview.pendingClients > 0 ? "Waiting for approval" : "Nothing waiting"}
+              icon={<Clock className="h-4 w-4" aria-hidden />}
+              tone={overview.pendingClients > 0 ? "amber" : "jade"}
+            />
+            <StatTile
+              label="Active clients"
+              value={overview.activeClients}
+              hint="Approved and unlocked"
+              icon={<UserCheck className="h-4 w-4" aria-hidden />}
+              tone="jade"
+            />
+            <StatTile
+              label="Banned clients"
+              value={overview.bannedClients}
+              hint="No dashboard access"
+              icon={<Ban className="h-4 w-4" aria-hidden />}
+              tone={overview.bannedClients > 0 ? "coral" : "blue"}
+            />
+            <StatTile
+              label="Unread messages"
+              value={overview.unreadMessages}
+              hint="Across public and client inbox"
+              icon={<Inbox className="h-4 w-4" aria-hidden />}
+              tone={overview.unreadMessages > 0 ? "violet" : "jade"}
+            />
+            <StatTile
+              label="Gallery images"
+              value={overview.galleryCount}
+              hint="Uploaded and stored"
+              icon={<Images className="h-4 w-4" aria-hidden />}
+            />
+            <StatTile
+              label="Managed videos"
+              value={overview.videoCount}
+              hint="Including drafts"
+              icon={<Video className="h-4 w-4" aria-hidden />}
+              tone="blue"
+            />
+            <StatTile
+              label="Active audio track"
+              value={overview.activeTrack ? "1" : "0"}
+              hint={overview.activeTrack?.title ?? "No track selected"}
+              icon={<Music4 className="h-4 w-4" aria-hidden />}
+              tone={overview.activeTrack ? "jade" : "amber"}
+            />
+          </div>
+
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr] lg:items-start">
+            <Panel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-base font-semibold text-ink">Recent sponsorship requests</h2>
+                <Link
+                  to="/admin/messages"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan underline-offset-2 hover:underline"
+                >
+                  Open inbox
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </div>
+
+              <div className="mt-5">
+                {overview.recentLeads.length === 0 ? (
+                  <EmptyState
+                    compact
+                    icon={<Handshake className="h-5 w-5 text-faint" aria-hidden />}
+                    title="No sponsorship requests yet"
+                    hint="Enquiries submitted through the sponsor page appear here."
+                  />
                 ) : (
-                  <p className="font-display text-2xl font-extrabold text-navy">{c.value}</p>
+                  <ul className="divide-y divide-hairline">
+                    {overview.recentLeads.map((lead) => (
+                      <li key={lead.id} className="py-3.5 first:pt-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="truncate text-sm font-medium text-ink">{lead.company || lead.name}</p>
+                          <Badge tone={lead.status === "new" ? "cyan" : "neutral"}>{lead.status}</Badge>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted">
+                          {lead.email}
+                          {lead.budget ? ` · ${lead.budget}` : ""}
+                        </p>
+                        <p className="mt-1 text-2xs text-faint">{formatRelative(lead.created_at)}</p>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-              <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-            </Card>
-          </Link>
-        ))}
-      </div>
+            </Panel>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Card className="p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-base font-bold text-navy">Latest inquiries</h2>
-            <Link to="/admin/inquiries" className="text-sm font-semibold text-saffron hover:underline">View all</Link>
-          </div>
-          {recentInqQ.isLoading ? (
-            <LoadingState />
-          ) : recentInqQ.isError ? (
-            <ErrorState onRetry={() => recentInqQ.refetch()} />
-          ) : (recentInqQ.data ?? []).length === 0 ? (
-            <EmptyState compact title="No inquiries yet" hint="Website inquiries will appear here." />
-          ) : (
-            <ul className="mt-4 divide-y divide-lightgray">
-              {recentInqQ.data!.slice(0, 5).map((i) => (
-                <li key={i.id} className="flex items-center justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-navy">{i.name}</p>
-                    <p className="text-xs text-muted">{i.phone} · {formatDate(i.created_at)}</p>
-                  </div>
-                  <Badge tone={i.status === "new" ? "saffron" : i.status === "admitted" ? "green" : "gray"}>
-                    {i.status.replace("_", " ")}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+            <Panel className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-base font-semibold text-ink">Latest inbox activity</h2>
+                <Link
+                  to="/admin/messages"
+                  className="text-xs font-semibold text-cyan underline-offset-2 hover:underline"
+                >
+                  All messages
+                </Link>
+              </div>
 
-        <Card className="p-5 sm:p-6">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-saffron" aria-hidden />
-            <h2 className="font-display text-base font-bold text-navy">Admissions funnel</h2>
+              <div className="mt-5">
+                {messagesQuery.isLoading ? (
+                  <LoadingState label="Loading messages…" />
+                ) : recentMessages.length === 0 ? (
+                  <EmptyState compact title="Inbox is empty" hint="Contact, sponsorship and client messages land here." />
+                ) : (
+                  <ul className="divide-y divide-hairline">
+                    {recentMessages.map((message) => (
+                      <li key={message.id} className="flex items-start gap-3 py-3.5 first:pt-0">
+                        <span
+                          aria-hidden
+                          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                            message.is_read ? "bg-white/20" : "bg-cyan"
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-ink">
+                            {message.sender_name || message.sender_email || "Unknown sender"}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs text-muted">
+                            {message.subject || truncate(message.body, 60)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-2xs text-faint">{formatRelative(message.created_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Panel>
           </div>
-          {totalInqQ.isLoading || newInqQ.isLoading ? (
-            <LoadingState />
-          ) : (
-            <dl className="mt-4 space-y-4">
-              {[
-                { label: "Total inquiries", value: totalInqQ.data ?? 0 },
-                { label: "New (awaiting contact)", value: newInqQ.data ?? 0 },
-              ].map((row) => (
-                <div key={row.label}>
-                  <div className="flex justify-between text-sm">
-                    <dt className="text-muted">{row.label}</dt>
-                    <dd className="font-display font-bold text-navy">{row.value}</dd>
-                  </div>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-lightgray">
-                    <div
-                      className="h-full rounded-full bg-saffron transition-all"
-                      style={{ width: `${Math.min(100, row.value * 10)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-              <li className="list-none text-xs text-muted">
-                Update inquiry statuses in the Inquiries page to track admitted students.
-              </li>
-            </dl>
-          )}
-        </Card>
-      </div>
+
+          <Panel className="mt-6 p-6">
+            <h2 className="font-display text-base font-semibold text-ink">Recent admin activity</h2>
+            <p className="mt-1.5 text-xs text-muted">
+              Every change made from the studio is recorded, so nothing happens silently.
+            </p>
+            <div className="mt-5">
+              {auditQuery.isLoading ? (
+                <LoadingState label="Loading activity…" />
+              ) : (auditQuery.data ?? []).length === 0 ? (
+                <EmptyState compact title="No recorded activity yet" hint="Actions taken in the studio show up here." />
+              ) : (
+                <ul className="divide-y divide-hairline text-sm">
+                  {(auditQuery.data ?? []).slice(0, 8).map((entry) => (
+                    <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 first:pt-0">
+                      <span className="text-ink">
+                        <span className="font-medium">{entry.action}</span>
+                        {entry.entity_type && <span className="text-muted"> · {entry.entity_type}</span>}
+                      </span>
+                      <span className="text-2xs text-faint">{formatDateTime(entry.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Panel>
+        </>
+      ) : null}
     </div>
   );
 }

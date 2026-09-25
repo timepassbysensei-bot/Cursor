@@ -1,262 +1,484 @@
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Trash2 } from "lucide-react";
-import { PageHeader } from "../../features/admin/PageHeader";
-import { CrudPage } from "../../features/admin/CrudPage";
-import { Button } from "../../components/ui/Button";
-import { Badge } from "../../components/ui/Section";
-import { LoadingState, ErrorState, EmptyState } from "../../components/ui/States";
-import { Modal } from "../../components/ui/Modal";
-import { adminService, mediaUpload } from "../../services/admin";
-import type { GalleryAlbum } from "../../types";
+import { ArrowDown, ArrowUp, Eye, EyeOff, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { useSeo } from "../../hooks/useSeo";
+import { adminService, logAdminAction } from "../../services/admin";
+import { removeStorageObject, uploadGalleryImage } from "../../services/uploads";
+import { GALLERY_CATEGORIES } from "../../lib/options";
+import { errorMessage } from "../../lib/utils";
+import { galleryMetaSchema } from "../../validation/schemas";
+import { PageHeader } from "../../components/PageHeader";
+import { Badge, Panel } from "../../components/ui/Section";
+import { Button, IconButton } from "../../components/ui/Button";
+import { ConfirmDialog, Modal } from "../../components/ui/Modal";
+import { Field } from "../../components/ui/Field";
+import { MediaUploader } from "../../components/MediaUploader";
+import { EmptyState, ErrorState, LoadingState } from "../../components/ui/States";
+import { useToast } from "../../components/ui/Toast";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
+import type { GalleryItem } from "../../types";
+
+interface MetaForm {
+  title: string;
+  caption: string;
+  alt_text: string;
+  category: string;
+  is_published: boolean;
+}
 
 export default function AdminGallery() {
-  const [managing, setManaging] = useState<GalleryAlbum | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+
+  const [editing, setEditing] = useState<GalleryItem | null>(null);
+  const [meta, setMeta] = useState<MetaForm | null>(null);
+  const [metaErrors, setMetaErrors] = useState<Record<string, string>>({});
+  const [deleting, setDeleting] = useState<GalleryItem | null>(null);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+
+  useSeo({ title: "Gallery — Arian studio", description: "Upload and manage gallery images.", noIndex: true });
+
+  const galleryQuery = useQuery({
+    queryKey: ["admin-gallery"],
+    queryFn: () => adminService.gallery(),
+    enabled: isSupabaseConfigured,
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-gallery"] });
+    queryClient.invalidateQueries({ queryKey: ["public-gallery"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+  };
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      const uploaded = await uploadGalleryImage(file);
+      const title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").slice(0, 120);
+      await adminService.insertGalleryItem({
+        storage_path: uploaded.path,
+        public_url: uploaded.publicUrl,
+        title: title || "Untitled image",
+        caption: null,
+        // A usable alt text placeholder that still has to be replaced — the
+        // editor flags it as needing a real description.
+        alt_text: `Placeholder alt text — describe this image (${title || "image"})`,
+        category: null,
+        width: uploaded.width && uploaded.width > 0 ? uploaded.width : null,
+        height: uploaded.height && uploaded.height > 0 ? uploaded.height : null,
+        sort_order: (galleryQuery.data ?? []).length,
+        is_published: true,
+      });
+      if (user) {
+        await logAdminAction({
+          adminUserId: user.id,
+          action: "gallery.uploaded",
+          entityType: "gallery_items",
+          details: { file: file.name, size: uploaded.sizeBytes },
+        });
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      push({ title: "Image uploaded", description: "Open the editor to add a title and alt text.", variant: "success" });
+    },
+    onError: (error: Error) =>
+      push({ title: "Upload failed", description: errorMessage(error), variant: "error" }),
+  });
+
+  const saveMeta = useMutation({
+    mutationFn: async (values: MetaForm) => {
+      if (!editing) return;
+      await adminService.updateGalleryItem(editing.id, {
+        title: values.title,
+        caption: values.caption || null,
+        alt_text: values.alt_text,
+        category: values.category || null,
+        is_published: values.is_published,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      setMeta(null);
+      setEditing(null);
+      push({ title: "Image details saved", variant: "success" });
+    },
+    onError: (error: Error) =>
+      push({ title: "Could not save", description: errorMessage(error), variant: "error" }),
+  });
+
+  const togglePublished = useMutation({
+    mutationFn: (item: GalleryItem) =>
+      adminService.updateGalleryItem(item.id, { is_published: !item.is_published }),
+    onSuccess: invalidate,
+    onError: (error: Error) => push({ title: "Could not update", description: errorMessage(error), variant: "error" }),
+  });
+
+  const reorder = useMutation({
+    mutationFn: async ({ id, direction }: { id: string; direction: -1 | 1 }) => {
+      const list = galleryQuery.data ?? [];
+      const index = list.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= list.length) return;
+      const reordered = [...list];
+      [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+      await adminService.reorderGallery(reordered.map((item, order) => ({ id: item.id, sort_order: order })));
+    },
+    onSuccess: invalidate,
+    onError: (error: Error) => push({ title: "Could not reorder", description: errorMessage(error), variant: "error" }),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (item: GalleryItem) => {
+      await adminService.deleteGalleryItem(item.id);
+      // Remove the stored file too; a failure here leaves an orphaned object
+      // but must not block deleting the row.
+      if (item.storage_path) {
+        await removeStorageObject("gallery", item.storage_path).catch(() => undefined);
+      }
+      if (user) {
+        await logAdminAction({
+          adminUserId: user.id,
+          action: "gallery.deleted",
+          entityType: "gallery_items",
+          entityId: item.id,
+        });
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      setDeleting(null);
+      push({ title: "Image deleted", variant: "success" });
+    },
+    onError: (error: Error) =>
+      push({ title: "Could not delete", description: errorMessage(error), variant: "error" }),
+  });
+
+  const items = useMemo(() => galleryQuery.data ?? [], [galleryQuery.data]);
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (category !== "All" && item.category !== category) return false;
+      if (!needle) return true;
+      return (
+        item.title.toLowerCase().includes(needle) ||
+        (item.caption ?? "").toLowerCase().includes(needle) ||
+        item.alt_text.toLowerCase().includes(needle)
+      );
+    });
+  }, [items, search, category]);
+
+  const publishable = items.filter((item) => item.is_published).length;
+
+  const openMeta = (item: GalleryItem) => {
+    setEditing(item);
+    setMetaErrors({});
+    setMeta({
+      title: item.title,
+      caption: item.caption ?? "",
+      alt_text: item.alt_text,
+      category: item.category ?? "",
+      is_published: item.is_published,
+    });
+  };
+
+  const submitMeta = () => {
+    if (!meta) return;
+    const parsed = galleryMetaSchema.safeParse(meta);
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
+      setMetaErrors(errors);
+      return;
+    }
+    setMetaErrors({});
+    saveMeta.mutate({
+      ...parsed.data,
+      caption: parsed.data.caption ?? "",
+      category: parsed.data.category ?? "",
+    });
+  };
 
   return (
     <div>
       <PageHeader
+        eyebrow="Content"
         title="Gallery"
-        description="Photo albums shown on the public gallery page. Upload images to the Storage 'media' bucket."
-      />
-      <CrudPage<GalleryAlbum>
-        title=""
-        entityName="Album"
-        queryKey={["admin", "albums"]}
-        fetcher={() => adminService.albums()}
-        searchKeys={["title", "category"]}
-        extraToolbar={
-          <span className="hidden text-xs text-muted sm:inline">Manage images inside an album via the button in each row.</span>
-        }
-        toPayload={(v, editing) => ({
-          ...(editing ? { id: editing.id } : {}),
-          title: String(v.title ?? "").trim(),
-          description: v.description || null,
-          category: v.category || null,
-          event_date: v.event_date || null,
-          cover_image_url: v.cover_image_url || null,
-          display_order: Number(v.display_order ?? 0),
-          status: v.status || "draft",
-        })}
-        upsert={(payload) => adminService.upsertAlbum(payload)}
-        remove={(id) => adminService.deleteAlbum(id)}
-        columns={[
-          {
-            key: "title",
-            header: "Album",
-            render: (a) => (
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-14 overflow-hidden rounded-lg bg-offwhite">
-                  {a.cover_image_url && <img src={a.cover_image_url} alt="" className="h-full w-full object-cover" />}
-                </div>
-                <div>
-                  <p className="font-semibold text-navy">{a.title}</p>
-                  <p className="text-xs text-muted">{a.category ?? "—"}</p>
-                </div>
-              </div>
-            ),
-          },
-          { key: "order", header: "Order", render: (a) => a.display_order },
-          {
-            key: "status",
-            header: "Status",
-            render: (a) => (
-              <Badge tone={a.status === "published" ? "green" : a.status === "draft" ? "gray" : "red"}>{a.status}</Badge>
-            ),
-          },
-        ]}
-        fields={[
-          { name: "title", label: "Album title", required: true, colSpan: 2 },
-          { name: "description", label: "Description", type: "textarea", colSpan: 2 },
-          { name: "category", label: "Category", placeholder: "e.g. Classroom, Sports, Events" },
-          { name: "event_date", label: "Event date", type: "date" },
-          { name: "cover_image_url", label: "Cover image URL", type: "url", colSpan: 2 },
-          { name: "display_order", label: "Display order", type: "number" },
-          {
-            name: "status",
-            label: "Status",
-            type: "select",
-            options: [
-              { value: "draft", label: "Draft" },
-              { value: "published", label: "Published" },
-              { value: "archived", label: "Archived" },
-            ],
-          },
-        ]}
+        description="Drop images in, then give each one a title and real alt text. Images are resized and converted in your browser before they are uploaded to Supabase Storage."
       />
 
-      {/* Row-level manage buttons are injected via a second pass below */}
-      <AlbumImagesManager album={managing} onClose={() => setManaging(null)} />
-      <ManageButtonsSetter onManage={setManaging} albumsQ={undefined} />
-    </div>
-  );
-}
-
-/** Bridges the CrudPage table rows to the image manager. */
-function ManageButtonsSetter({
-  onManage,
-}: {
-  onManage: (a: GalleryAlbum) => void;
-  albumsQ?: unknown;
-}) {
-  const albumsQ = useQuery({ queryKey: ["admin", "albums"], queryFn: () => adminService.albums() });
-  const qc = useQueryClient();
-  const [mounted, setMounted] = useState(false);
-
-  useMutation({
-    mutationFn: async () => undefined,
-  });
-
-  // Attach a "Images" action into each CrudPage row via a DOM-free approach:
-  // render a compact album list under the CRUD table as the primary way to manage images.
-  if (!mounted) {
-    // one-time flag; component renders the helper list every render
-    setMounted(true);
-  }
-
-  const albums = albumsQ.data ?? [];
-
-  return (
-    <div className="mt-8">
-      <h2 className="font-display text-base font-bold text-navy">Manage album images</h2>
-      <p className="mt-1 text-sm text-muted">Pick an album to upload photos, set captions and remove images.</p>
-      {albumsQ.isLoading ? (
-        <LoadingState />
-      ) : albumsQ.isError ? (
-        <ErrorState onRetry={() => albumsQ.refetch()} />
-      ) : albums.length === 0 ? (
-        <EmptyState compact title="No albums yet" hint="Create an album above first." />
-      ) : (
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {albums.map((a) => (
-            <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-lightgray bg-white px-4 py-3">
-              <span className="truncate text-sm font-semibold text-navy">{a.title}</span>
-              <Button variant="outline" size="sm" onClick={() => onManage(a)}>
-                <ImagePlus className="h-4 w-4" aria-hidden /> Images
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button type="button" className="hidden" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "albums"] })} aria-hidden tabIndex={-1} />
-    </div>
-  );
-}
-
-function AlbumImagesManager({
-  album,
-  onClose,
-}: {
-  album: GalleryAlbum | null;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [caption, setCaption] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const imagesQ = useQuery({
-    queryKey: ["admin", "gallery-images", album?.id],
-    queryFn: () => adminService.images(album!.id),
-    enabled: Boolean(album),
-  });
-
-  async function handleUpload(files: FileList | null) {
-    if (!album || !files || files.length === 0) return;
-    setUploading(true);
-    setError(null);
-    try {
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) {
-          setError(`${file.name} is not an image — skipped.`);
-          continue;
-        }
-        if (file.size > 5 * 1024 * 1024) {
-          setError(`${file.name} is larger than 5 MB — skipped.`);
-          continue;
-        }
-        const url = await mediaUpload.image(file, "gallery");
-        await adminService.insertImage({
-          album_id: album.id,
-          url,
-          caption: caption || null,
-          alt_text: caption || album.title,
-        });
-      }
-      setCaption("");
-      if (fileRef.current) fileRef.current.value = "";
-      qc.invalidateQueries({ queryKey: ["admin", "gallery-images", album.id] });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const removeImage = useMutation({
-    mutationFn: (id: string) => adminService.deleteImage(id),
-    onSuccess: () => album && qc.invalidateQueries({ queryKey: ["admin", "gallery-images", album.id] }),
-  });
-
-  if (!album) return null;
-
-  return (
-    <Modal open onClose={onClose} title={`Images — ${album.title}`} wide>
-      <div className="space-y-4">
-        <div className="rounded-xl border border-lightgray bg-offwhite p-4">
-          <label htmlFor="img-caption" className="mb-1.5 block text-sm font-semibold text-ink">
-            Caption for next upload (optional)
-          </label>
-          <input
-            id="img-caption"
-            className="input"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            placeholder="e.g. Morning PT session"
-          />
-          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-lightgray bg-white px-4 py-6 text-sm font-semibold text-navy hover:border-navy/40">
-            <ImagePlus className="h-5 w-5" aria-hidden />
-            {uploading ? "Uploading…" : "Choose image(s) to upload"}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+        <Panel className="p-5">
+          <h2 className="font-display text-base font-semibold text-ink">Upload</h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted">
+            Drag and drop, or choose files. Up to 12 at a time, 12 MB each before compression.
+          </p>
+          <div className="mt-5">
+            <MediaUploader
+              kind="image"
               multiple
-              className="sr-only"
-              onChange={(e) => handleUpload(e.target.files)}
+              accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
+              title="Drop images here"
+              hint="JPG, PNG, WebP, AVIF or GIF. Large photos are downscaled to 2200px and re-encoded as WebP."
+              disabled={!isSupabaseConfigured}
+              onUpload={(file, onProgress) => upload.mutateAsync(file).then(() => onProgress(100))}
             />
-          </label>
-          <p className="mt-2 text-xs text-muted">Images up to 5 MB each. Alt text uses the caption automatically.</p>
+          </div>
+
+          {!isSupabaseConfigured && (
+            <p className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] p-3 text-2xs leading-relaxed text-amber-200/90">
+              Uploads need Supabase Storage. Add the Supabase keys and apply the migrations to enable them.
+            </p>
+          )}
+
+          <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-hairline pt-5 text-sm">
+            <div>
+              <dt className="text-2xs uppercase tracking-[0.16em] text-faint">Images</dt>
+              <dd className="mt-1 font-display text-lg font-semibold text-ink tabular-nums">{items.length}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-[0.16em] text-faint">Published</dt>
+              <dd className="mt-1 font-display text-lg font-semibold text-ink tabular-nums">{publishable}</dd>
+            </div>
+          </dl>
+        </Panel>
+
+        <div>
+          <Panel className="p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="gallery-search" className="label">
+                  Search
+                </label>
+                <input
+                  id="gallery-search"
+                  type="search"
+                  className="input"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search titles, captions and alt text…"
+                />
+              </div>
+              <div className="sm:w-52">
+                <label htmlFor="gallery-category" className="label">
+                  Category
+                </label>
+                <select
+                  id="gallery-category"
+                  className="input"
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                >
+                  <option value="All">All categories</option>
+                  {GALLERY_CATEGORIES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Panel>
+
+          <div className="mt-6">
+            {galleryQuery.isLoading ? (
+              <LoadingState label="Loading images…" />
+            ) : galleryQuery.isError ? (
+              <ErrorState title="The gallery could not load" onRetry={() => void galleryQuery.refetch()} />
+            ) : items.length === 0 ? (
+              <EmptyState
+                title="No images yet"
+                hint="Upload your first image — it appears in the public gallery straight away."
+              />
+            ) : filtered.length === 0 ? (
+              <EmptyState title="Nothing matches" hint="Try a different search or category." />
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2">
+                {filtered.map((item) => {
+                  const index = items.findIndex((entry) => entry.id === item.id);
+                  return (
+                    <li key={item.id}>
+                      <Panel className="overflow-hidden p-0">
+                        <div className="relative aspect-[4/3] overflow-hidden bg-base/60">
+                          <img
+                            src={item.public_url}
+                            alt={item.alt_text}
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                          <div className="absolute left-2 top-2 flex gap-1.5">
+                            {item.category && <Badge tone="cyan">{item.category}</Badge>}
+                            {!item.is_published && <Badge tone="amber">Hidden</Badge>}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5">
+                          <p className="truncate text-sm font-medium text-ink">{item.title}</p>
+                          <p className="mt-1 line-clamp-2 text-2xs leading-relaxed text-faint">
+                            {item.alt_text}
+                          </p>
+                          <p className="mt-2 text-2xs text-faint">
+                            order {index + 1}
+                            {item.width && item.height ? ` · ${item.width}×${item.height}` : ""}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                            <IconButton
+                              label="Move up"
+                              onClick={() => reorder.mutate({ id: item.id, direction: -1 })}
+                              disabled={index === 0 || reorder.isPending}
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+                            </IconButton>
+                            <IconButton
+                              label="Move down"
+                              onClick={() => reorder.mutate({ id: item.id, direction: 1 })}
+                              disabled={index === items.length - 1 || reorder.isPending}
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                            </IconButton>
+                            <IconButton
+                              label={item.is_published ? "Hide from the site" : "Publish on the site"}
+                              onClick={() => togglePublished.mutate(item)}
+                            >
+                              {item.is_published ? (
+                                <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" aria-hidden />
+                              )}
+                            </IconButton>
+                            <IconButton label="Edit details" onClick={() => openMeta(item)}>
+                              <Pencil className="h-3.5 w-3.5" aria-hidden />
+                            </IconButton>
+                            <IconButton label="Delete image" variant="danger" onClick={() => setDeleting(item)}>
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                            </IconButton>
+                          </div>
+                        </div>
+                      </Panel>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
-
-        {error && <p role="alert" className="rounded-lg border border-error/25 bg-error/[0.05] px-4 py-3 text-sm text-error">{error}</p>}
-
-        {imagesQ.isLoading ? (
-          <LoadingState />
-        ) : imagesQ.data && imagesQ.data.length > 0 ? (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {imagesQ.data.map((img) => (
-              <li key={img.id} className="overflow-hidden rounded-xl border border-lightgray bg-white">
-                <img src={img.url} alt={img.alt_text ?? ""} className="aspect-[4/3] w-full object-cover" loading="lazy" />
-                <div className="flex items-center justify-between gap-2 p-2">
-                  <span className="truncate text-xs text-muted">{img.caption ?? "—"}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeImage.mutate(img.id)}
-                    aria-label={`Delete image ${img.caption ?? ""}`}
-                    className="rounded-lg border border-error/25 p-1.5 text-error hover:bg-error/[0.06]"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <EmptyState compact title="No images yet" hint="Upload the first photos for this album." />
-        )}
       </div>
-    </Modal>
+
+      <Modal
+        open={Boolean(meta)}
+        onClose={() => setMeta(null)}
+        title="Image details"
+        description="Alt text matters: it is what a screen reader announces, and what search engines read."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setMeta(null)} disabled={saveMeta.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={submitMeta} disabled={saveMeta.isPending}>
+              Save details
+            </Button>
+          </>
+        }
+      >
+        {meta && (
+          <div className="space-y-5">
+            {editing && (
+              <img
+                src={editing.public_url}
+                alt=""
+                className="max-h-56 w-full rounded-xl border border-hairline object-cover"
+              />
+            )}
+
+            <Field label="Title" htmlFor="meta-title" error={metaErrors.title} required>
+              <input
+                id="meta-title"
+                className="input"
+                value={meta.title}
+                onChange={(event) => setMeta({ ...meta, title: event.target.value })}
+              />
+            </Field>
+
+            <Field
+              label="Alt text"
+              htmlFor="meta-alt"
+              error={metaErrors.alt_text}
+              hint="Describe what is in the image, for people who cannot see it."
+              required
+            >
+              <textarea
+                id="meta-alt"
+                rows={2}
+                className="input"
+                value={meta.alt_text}
+                onChange={(event) => setMeta({ ...meta, alt_text: event.target.value })}
+              />
+            </Field>
+
+            <Field label="Caption" htmlFor="meta-caption" error={metaErrors.caption}>
+              <textarea
+                id="meta-caption"
+                rows={2}
+                className="input"
+                value={meta.caption}
+                onChange={(event) => setMeta({ ...meta, caption: event.target.value })}
+              />
+            </Field>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Category" htmlFor="meta-category" error={metaErrors.category}>
+                <select
+                  id="meta-category"
+                  className="input"
+                  value={meta.category}
+                  onChange={(event) => setMeta({ ...meta, category: event.target.value })}
+                >
+                  <option value="">Not set</option>
+                  {GALLERY_CATEGORIES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="flex items-end">
+                <label className="flex items-center gap-2.5 pb-2.5 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-hairline bg-base/60 accent-cyan"
+                    checked={meta.is_published}
+                    onChange={(event) => setMeta({ ...meta, is_published: event.target.checked })}
+                  />
+                  Published on the site
+                </label>
+              </div>
+            </div>
+
+            {editing && editing.storage_path && (
+              <p className="flex items-center gap-2 border-t border-hairline pt-4 text-2xs text-faint">
+                <GripVertical className="h-3 w-3" aria-hidden />
+                Stored at <span className="font-mono">{editing.storage_path}</span>
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title="Delete this image?"
+        message={`"${deleting?.title ?? ""}" will be removed from the gallery and deleted from storage. This cannot be undone.`}
+        confirmLabel="Delete image"
+        destructive
+        busy={remove.isPending}
+        onConfirm={() => deleting && remove.mutate(deleting)}
+        onCancel={() => setDeleting(null)}
+      />
+    </div>
   );
 }

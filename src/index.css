@@ -3,61 +3,176 @@
 @tailwind utilities;
 
 :root {
-  --navy: #102a43;
-  --navy-dark: #071a2b;
-  --navy-mid: #1f4e78;
-  --saffron: #d97706;
-  --offwhite: #f8fafc;
-  --ink: #172033;
+  --base: #080b14;
+  --surface: #101625;
+  --elevated: #151d31;
+  --ink: #f7f8fc;
+  --muted: #98a3b8;
+  --line: rgba(247, 248, 252, 0.1);
+  --blue: #5e9fe8;
+  --cyan: #52d6e8;
+  --violet: #9b7cff;
+  --jade: #72bc8f;
+  --coral: #e97366;
+  color-scheme: dark;
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  @apply bg-offwhite text-ink font-body antialiased;
+  @apply bg-base font-body text-ink antialiased;
+  /* Cinematic lighting: two very soft light pools, never a flat background. */
+  background-image:
+    radial-gradient(58rem 34rem at 12% -8%, rgba(94, 159, 232, 0.14), transparent 65%),
+    radial-gradient(46rem 30rem at 92% 4%, rgba(155, 124, 255, 0.12), transparent 62%),
+    radial-gradient(40rem 28rem at 50% 120%, rgba(82, 214, 232, 0.08), transparent 60%);
+  background-attachment: fixed;
+  overflow-x: hidden;
 }
 
-/* Visible keyboard focus everywhere */
+/* Text selection reads as part of the design rather than a browser default. */
+::selection {
+  background: rgba(94, 159, 232, 0.32);
+  color: #ffffff;
+}
+
+/* Visible keyboard focus everywhere, in the accent rather than the browser blue. */
 :focus-visible {
-  outline: 2px solid #d97706;
+  outline: 2px solid var(--cyan);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
-/* Thin decorative rule used by section eyebrows */
-.eyebrow-rule::before {
-  content: "";
-  display: inline-block;
-  width: 2rem;
-  height: 2px;
-  background: #d97706;
-  margin-right: 0.75rem;
-  vertical-align: middle;
+/* Fine film grain over the whole page; pointer-events off so it never blocks clicks. */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.14;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.text-balance {
-  text-wrap: balance;
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-5 sm:px-8 lg:px-10;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Editorial eyebrow: a hairline rule plus tracked-out caps. */
+  .eyebrow {
+    @apply inline-flex items-center gap-3 font-display text-2xs font-semibold uppercase tracking-[0.28em] text-cyan;
+  }
+
+  .eyebrow::before {
+    content: "";
+    @apply block h-px w-8 bg-gradient-to-r from-cyan/10 via-cyan to-cyan/10;
+  }
+
+  .eyebrow-center::before {
+    @apply hidden;
+  }
+
+  /* Subtle glass surface — used sparingly, never as the default container. */
+  .glass {
+    @apply border border-hairline bg-white/[0.035] backdrop-blur-xl;
+  }
+
+  .panel {
+    @apply rounded-2xl border border-hairline bg-surface/80 shadow-glass;
+  }
+
+  .card-hover {
+    @apply transition-all duration-500 ease-editorial hover:-translate-y-1 hover:border-white/20;
+  }
+
+  /* Fine gradient hairline used as a section divider. */
+  .rule-gradient {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-hairline to-transparent;
+  }
+
+  .input {
+    @apply block h-11 w-full rounded-xl border border-hairline bg-base/60 px-3.5 text-sm text-ink shadow-inner shadow-black/20 outline-none transition-colors placeholder:text-faint focus:border-cyan/60 focus:bg-base/80 focus:ring-2 focus:ring-cyan/20;
+  }
+
+  textarea.input {
+    @apply h-auto py-2.5 leading-relaxed;
+  }
+
+  select.input {
+    @apply cursor-pointer pr-8;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Skeleton shimmer used by loading placeholders. */
+  .skeleton {
+    @apply rounded-xl bg-white/[0.05];
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgba(247, 248, 252, 0.09) 45%,
+      transparent 70%
+    );
+    background-size: 220% 100%;
+    @apply animate-skeleton-sweep;
+  }
+
+  /* Animated gradient light behind major sections. */
+  .aura {
+    @apply pointer-events-none absolute -z-10 rounded-full blur-[110px];
+  }
 }
 
-/* Safe horizontal scrolling tables on mobile */
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* Slim, unobtrusive scrollbars inside scroll areas. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(247, 248, 252, 0.18) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(247, 248, 252, 0.16);
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-/* Shared form control styling */
-.input {
-  @apply block h-11 w-full rounded-lg border border-lightgray bg-white px-3.5 text-sm text-ink shadow-sm placeholder:text-muted/60 focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20;
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-textarea.input {
-  @apply h-auto py-2.5;
-}
-
-select.input {
-  @apply pr-8;
+/* Autofill in dark mode otherwise paints a white box over the input. */
+input:-webkit-autofill,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px #101625 inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -70,5 +185,9 @@ select.input {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .grain-overlay {
+    display: none;
   }
 }

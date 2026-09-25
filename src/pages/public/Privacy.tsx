@@ -1,51 +1,81 @@
-import { Section } from "../../components/ui/Section";
+import { LegalDoc } from "../../components/LegalDoc";
 import { useSeo } from "../../hooks/useSeo";
+import { useSiteContent } from "../../hooks/useSiteContent";
+import { DEFAULT_SITE_CONTENT } from "../../lib/siteContent";
 
 export default function Privacy() {
-  useSeo("Privacy Policy — Bokaro Defence Academy");
+  const { data: content = DEFAULT_SITE_CONTENT } = useSiteContent();
+  useSeo({
+    title: `Privacy policy — ${content.brandName}`,
+    description:
+      "What this website collects, why it collects it, where it is stored, and how to have it removed.",
+  });
+
   return (
-    <Section tone="offwhite">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="font-display text-3xl font-extrabold text-navy">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-muted">Last updated: template version — academy to review before go-live.</p>
-        <div className="mt-8 space-y-6 text-sm leading-relaxed text-ink">
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">1. What we collect</h2>
-            <p className="mt-2">
-              When you submit an inquiry, we collect the details you provide: your name, phone number, WhatsApp number,
-              email, city, interested course and message. When you use the student portal, we process your profile,
-              enrolment, attendance, test results and messages needed to run the academy.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">2. How we use it</h2>
-            <p className="mt-2">
-              We use your information to respond to inquiries, run admissions, deliver classes and results, and
-              communicate notices. We do not sell your data. Public testimonials or results are only published with
-              the recorded consent of the student.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">3. Storage and security</h2>
-            <p className="mt-2">
-              Data is stored in a managed cloud database with row-level security. Access is restricted to authorised
-              academy staff based on their role. Passwords are stored only as secure hashes by our authentication
-              provider.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">4. Your choices</h2>
-            <p className="mt-2">
-              You may request correction or removal of your personal data by contacting the academy office. Student
-              academic records are retained as required for administration and may be archived rather than deleted.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">5. Contact</h2>
-            <p className="mt-2">For privacy questions, contact the academy office using the details on our Contact page.</p>
-          </div>
-        </div>
-      </div>
-    </Section>
+    <LegalDoc
+      title="Privacy policy"
+      intro="This page explains, plainly, what this website collects and what it does with it. It describes how the site is actually built rather than boilerplate — and if anything here stops being true, it should be updated."
+      links={[
+        { to: "/terms", label: "Terms of use" },
+        { to: "/contact", label: "Ask a question" },
+      ]}
+      sections={[
+        {
+          heading: "What is collected",
+          paragraphs: [
+            "Browsing the public website requires no account and collects nothing you type. The site only stores information in the specific cases below.",
+          ],
+          bullets: [
+            "Contact form: your name, email address and message.",
+            "Sponsorship form: your name, email, company, website, campaign details, budget range, timeline and message.",
+            "Client accounts: your name, email address, an optional profile picture and the messages you send from the dashboard.",
+            "Basic technical logs: the hosting and database providers record request information such as IP address and timestamps for security and abuse prevention.",
+          ],
+        },
+        {
+          heading: "Why it is collected",
+          paragraphs: [
+            "Contact and sponsorship details are stored so Arian can read your message and reply to you. Account details are stored so you can sign in and keep your messages and sponsorship enquiries in one place. Requests are rate limited so the forms cannot be used to flood the inbox.",
+          ],
+        },
+        {
+          heading: "Where it is stored",
+          paragraphs: [
+            "Messages, accounts, videos, gallery images and music are stored in a Supabase (PostgreSQL) database and file storage, and the website is served by Netlify. Both act as data processors on Arian's behalf. Music and gallery files are served from the site's own storage, not from third-party trackers.",
+          ],
+        },
+        {
+          heading: "Cookies and tracking",
+          paragraphs: [
+            "This site does not run advertising trackers or third-party analytics, and sets no marketing cookies. It stores a small amount of data in your browser's local storage for things you would expect: keeping you signed in, remembering whether you muted the background music, whether you dismissed the music player or announcement banner, and a short-term form submission limit.",
+            "YouTube videos are not embedded by default. Video links open on YouTube in a new tab, so YouTube's own cookies apply only once you choose to go there.",
+          ],
+        },
+        {
+          heading: "AI assistant",
+          paragraphs: [
+            "Questions you type into Arian Assistant are sent to a serverless function and forwarded to Google's Gemini API to generate an answer, along with Arian's approved notes about the channel. Conversation history is kept in your browser tab only and is gone when you close it. Do not type personal or sensitive information into the assistant.",
+          ],
+        },
+        {
+          heading: "Your choices",
+          paragraphs: [
+            "You can ask for your message or account data to be deleted at any time by using the contact page. If you have an account, you can also change your name and profile details from the dashboard, and sign out to end your session.",
+          ],
+        },
+        {
+          heading: "Children",
+          paragraphs: [
+            "This site is not directed at children under 13, and accounts are not intended for them. If a message is received from a child, it will be deleted on request.",
+          ],
+        },
+        {
+          heading: "Changes and contact",
+          paragraphs: [
+            "If this policy changes, the updated version will appear on this page. For any privacy question, use the contact form — that is the fastest route to a real answer from Arian.",
+          ],
+        },
+      ]}
+    />
   );
 }

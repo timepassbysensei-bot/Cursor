@@ -1,0 +1,14 @@
+# Arian — creator website
+# Replace the sitemap host below with the real domain once the site is live.
+
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /auth/
+Disallow: /api/
+
+Sitemap: https://youknowarian.netlify.app/sitemap.xml

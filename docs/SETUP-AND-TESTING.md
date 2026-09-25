@@ -1,84 +1,199 @@
-# Setup, Environment & Testing Guide
+# Setup checklist & manual test plan
 
-## 1. Environment variables
+Everything in this document is written to be followed in order. Steps 1–7 take a new
+Supabase project from empty to a working site; step 8 adds the assistant; steps 9–10
+deploy and verify.
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `VITE_SUPABASE_URL` | Frontend env (public) | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Frontend env (public) | Anon key — safe to expose; all privileged access is blocked by RLS |
-| `GEMINI_API_KEY` | Supabase edge-function secret only | Optional AI grounding for the chatbot |
+---
 
-**No service-role key or admin secret is ever placed in a `VITE_*` variable or
-shipped to the browser.** Privileged operations (creating accounts) run in edge
-functions that verify the caller's admin role before using the service-role
-key server-side.
+## 1. Create the Supabase project
 
-## 2. Database setup
+1. <https://supabase.com/dashboard> → **New project**. Pick a region close to Arian's
+   audience (Mumbai / Singapore for India).
+2. Save the database password somewhere safe — it is not needed by the app.
+3. **Project Settings → API** and copy:
+   * Project URL → `VITE_SUPABASE_URL` and `SUPABASE_URL`
+   * `anon` public key → `VITE_SUPABASE_ANON_KEY`
+   * `service_role` secret → `SUPABASE_SERVICE_ROLE_KEY` (**server-side only**)
 
-1. Run `supabase/migrations/20250101000000_init_schema.sql`.
-2. Run `supabase/migrations/20250102000000_ranks_rpc.sql`.
-3. Deploy the three edge functions (see README).
+## 2. Run the database migrations
 
-The migration creates: profiles + user_roles (kept in sync by trigger),
-courses, batches, enrollments, subjects, tests, marks, attendance,
-assignments + submissions, resources, notices, achievements, testimonials,
-gallery albums + images, chatbot FAQs + unanswered questions log, inquiries,
-site_settings, audit_logs, storage bucket + storage policies, RLS on every
-table, audit triggers, updated-at triggers, and labelled sample seed data.
+In the Supabase dashboard → **SQL Editor**, run these files in order, in full:
 
-## 3. Verification steps performed
+1. `supabase/migrations/20250601000000_creator_platform_schema.sql`
+   Tables, indexes, `updated_at` triggers, the role helpers (`is_admin()`,
+   `is_client_beta_allowed()`, `is_signed_in_in_good_standing()`), the
+   `handle_new_user` trigger and the privilege guard, and the three storage buckets.
+2. `supabase/migrations/20250601000100_creator_platform_rls.sql`
+   Enables RLS on every table, adds the policies and the storage policies.
+3. `supabase/seed.sql`
+   Editable site copy and the assistant's knowledge base. Safe to re-run.
 
-- `bun run typecheck` — passes with zero errors.
-- `bun run lint` — passes with zero warnings (max-warnings 0).
-- `bun test` — 39 tests pass across 5 suites:
-  - marks math (missing ≠ zero, per-subject pass thresholds, absence handling,
-    batch stats, tie-aware ranking),
-  - validation schemas (Indian phone format, consent requirement, password
-    rules),
-  - utils (slugify, percent guards, URL safety, date fallbacks),
-  - service behaviour before Supabase credentials exist (default settings,
-    empty lists instead of network errors, clear inquiry error) and the
-    settings-update regression (row located by id, never by academy_name),
-  - render smoke tests for the public pages plus the setup banner,
-  - a **schema contract test** that parses the SQL migrations and fails if any
-    page selects a column that does not exist (this class of bug typechecks and
-    only breaks at runtime).
-- Manual QA checklist for staff (verify in the running app after connecting
-  Supabase):
-  - Landing page renders all sections with data from Supabase; graceful
-    empty states when tables are empty.
-  - Sign in → redirected to the correct dashboard per role.
-  - Admin: create/edit/archive course → appears/disappears on the site.
-  - Admin: create student account → student can sign in with temporary
-    password and is forced to change it.
-  - Teacher: mark attendance → student portal reflects it after refresh.
-  - Teacher: create test → enter marks → publish → student sees results;
-    before publish the student sees nothing.
-  - Student: submit assignment → teacher grades it → student sees feedback.
-  - Public inquiry form → lead appears in admin inquiries with UTM data.
-  - Achievement without consent recorded → not visible publicly (RLS).
-- Responsiveness: checked at 360px, 768px, 1280px widths; tables collapse to
-  cards; drawer nav on mobile.
+Verify with `select tablename, rowsecurity from pg_tables where schemaname = 'public';`
+— every row should read `true`.
 
-## 3b. Bugs found and fixed during QA
+## 3. Create the storage buckets
 
-| Bug | Impact | Fix |
-|---|---|---|
-| `public/Resources.tsx` selected `resource_type`, `file_url`, `external_url` and filtered `status = 'published'` | Page always failed with a PostgREST 400; resources never appeared | Query the real schema (`url`, `kind`, `visibility='public'`, `status='active'`) |
-| `updateSiteSettings` matched the row with `.eq("academy_name", …)` | Renaming the academy made every later settings save update 0 rows and throw | Locate the row by primary key, insert when absent |
-| Invalid Tailwind classes `h-4.5 w-4.5` (login eye toggle, resources icon) | Classes are never generated, so icons rendered 24px and broke alignment | Use `h-5 w-5` |
-| "View All FAQs" linked to `/contact`, which had no FAQs | Dead-end CTA | Added the full published-FAQ list to the contact page and link to `/contact#faqs` |
-| Forced password change redirected to the public homepage | Staff/students landed on `/` after setting a password | Redirect to the dashboard for the signed-in role |
-| No-Supabase state showed error boxes across the site | Preview looked broken before setup | Public fetchers return real empty/default states plus a setup banner naming the env vars |
-| Phone numbers rendered as `tel:+91+91…` when stored with a country code | Broken call/WhatsApp links | Normalise phone fields to 10 digits on save |
-| Empty gallery album gave no feedback when opened | Looked unresponsive | Explicit "no photos in this album" dialog |
+Step 2 already creates them. Confirm in **Storage** that `gallery`, `audio` and
+`avatars` exist and are marked **public** (the site links to their files directly).
+If you create them by hand instead, tick "Public bucket" and re-run the two storage
+policy blocks from the RLS migration.
 
-## 4. Running tests
+## 4. Configure Supabase Auth
 
-```bash
-bun test          # all unit tests
-bun test --watch  # during development
-bun run lint      # eslint with zero-warning gate
+1. **Authentication → Providers → Email**: enable it. Keep *Confirm email* **on** so
+   the verification flow is exercised; turn it off only for local testing.
+2. **Authentication → URL configuration**:
+   * Site URL: `https://your-site.netlify.app`
+   * Redirect URLs: add `https://your-site.netlify.app/**`, `http://localhost:5173/**`
+     and `http://localhost:8888/**` (the last is `netlify dev`).
+   These must match `VITE_SITE_URL`, otherwise password-reset and magic-link
+   redirects are rejected.
+3. **Authentication → Settings**: set a minimum password length of 8 to match the
+   form validation.
+4. Optional but recommended for production: add custom SMTP. The built-in mailer is
+   rate limited and is not suitable for real password resets.
+
+## 5. Create the first admin user — securely
+
+Admin is never selectable in the UI. Create it in SQL:
+
+```sql
+-- 1. Sign up once through /signup with the real address (it becomes a pending client).
+-- 2. Promote exactly that row:
+update public.profiles
+set role = 'admin', status = 'active'
+where email = 'you@example.com';
+
+-- 3. Confirm there is exactly one admin:
+select id, email, role, status from public.profiles where role = 'admin';
 ```
 
-Test files live next to the code they cover (`*.test.ts`).
+The account now passes `RequireAdmin` and `is_admin()`. Everyone else who signs up
+stays a `client` with `pending` access until approved in **Studio → Clients**.
+Someone else can be promoted later from the studio's "Make admin" action, which is
+recorded in the audit log.
+
+## 6. Configure Gemini
+
+1. <https://aistudio.google.com/apikey> → **Create API key**.
+2. Put it in `GEMINI_API_KEY` (browser env vars must never contain it).
+3. Optionally set `GEMINI_MODEL` (default `gemini-2.0-flash`) and
+   `CHAT_RATE_LIMIT_PER_MINUTE` (default `12`).
+4. Without a key the assistant still works — it answers from Arian's brief locally and
+   tells the visitor it is in offline mode.
+
+## 7. Configure Netlify
+
+1. **Add new site → Import an existing project** and pick this repository.
+2. Build settings come from `netlify.toml`: `npm run build`, publish `dist`,
+   functions `netlify/functions`. Nothing needs changing in the UI.
+3. `netlify.toml` also sets the `/api/*` → functions redirect, the SPA fallback,
+   the security headers and the Content-Security-Policy. If you connect a custom
+   domain or a different Supabase project, extend the CSP's `img-src`, `media-src`
+   and `connect-src` accordingly.
+
+## 8. Add the environment variables
+
+Netlify → **Site configuration → Environment variables**. Add all ten from
+`env.example`. Scopes:
+
+* `VITE_*` → build-time, visible to the browser (that is intended);
+* `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`,
+  `CHAT_RATE_LIMIT_PER_MINUTE` → server-side only.
+
+Locally, `cp env.example .env.local` and fill in the same values.
+
+## 9. Deploy
+
+```bash
+bun install
+bun run test        # 45 tests
+bun run typecheck
+bun run build       # must produce dist/
+git push            # Netlify builds and deploys
+```
+
+For a local end-to-end run including the functions, use `netlify dev` (port 8888)
+rather than `bun run dev` — Vite alone does not serve `/api/*`.
+
+## 10. Test the flows
+
+Work through the table below on the deployed URL. Anything you cannot complete is a
+bug; the "Expected" column is the contract.
+
+### Public, no account
+
+| # | Flow | Expected |
+| --- | --- | --- |
+| 1 | Browse `/`, `/about`, `/videos`, `/gallery`, `/sponsor`, `/contact`, `/chat` | All render; no console errors; no horizontal scroll at 390px |
+| 2 | `/videos` filters and search | Filters combine; "Clear filters" resets; empty result shows an empty state |
+| 3 | Gallery lightbox | Click opens; ←/→ navigate; Esc closes; focus returns; images have alt text |
+| 4 | Contact form | Empty submit shows inline errors; honeypot left blank; success confirmation; the row appears in **Studio → Messages** as *Public* |
+| 5 | Sponsor form | Same, and the row appears under *Sponsorships* with budget and timeline |
+| 6 | Spam guard | Submitting 4 times in a row shows the rate-limit notice |
+| 7 | Assistant | Suggested question answers; off-topic question is declined; reset clears the thread; with no key it says it is in offline mode |
+| 8 | Background music | Hidden until a track is set active; never autoplays; mute choice survives a reload |
+| 9 | 404 | An unknown URL renders the 404 page with working links |
+
+### Accounts and roles
+
+| # | Flow | Expected |
+| --- | --- | --- |
+| 10 | Sign up at `/signup` | Verification email arrives; account is `client` + `pending`; no role control anywhere |
+| 11 | Email login | Lands on `/dashboard` with the pending notice |
+| 12 | Password reset | `/forgot-password` sends a link; `/auth/reset-password` accepts a new password; old one stops working |
+| 13 | `/dashboard` while pending | Readable, but messaging and sponsorship show "access pending" |
+| 14 | Approve in **Studio → Clients** | Status becomes Active; the client's inbox and forms unlock |
+| 15 | Make a message as a client | Appears in **Studio → Messages** as *Client*; the admin reply appears in the client's inbox |
+| 16 | Suspend | Client sees the suspended notice; inbox reads come back empty |
+| 17 | Ban | Client sees the removed-access notice; `messages` reads return nothing |
+| 18 | Unban, then Remove access | Returns to pending, then normal |
+| 19 | Studio authorization | Signing in as a client and visiting `/admin` shows "Admin access only" |
+
+### Studio
+
+| # | Flow | Expected |
+| --- | --- | --- |
+| 20 | Add a video from a YouTube URL | Id and thumbnail are derived; it appears on `/videos` and the homepage |
+| 21 | Feature a video | Only one featured at a time; the homepage hero card updates |
+| 22 | Reorder videos | Up/down arrows persist through a reload |
+| 23 | Delete a video | Confirmation dialog first; gone from both studio and site |
+| 24 | Upload gallery images | Drag-and-drop works; progress bar advances; a 12 MB photo is compressed in the browser |
+| 25 | Edit image details | Title, alt text and category save; hiding it removes it from the public gallery |
+| 26 | Delete an image | Confirmation first; the file is removed from Storage as well as the row |
+| 27 | Upload an MP3 | Track appears with its file size; "Set active" adds the player to the site; preview plays in the studio |
+| 28 | Replace / remove the active track | Only one active track is possible — the database enforces it |
+| 29 | Broadcast to all clients | Delivery records show `n delivered`; each client sees it in their inbox |
+| 30 | Broadcast to one client | Only that client sees it |
+| 31 | Public announcement | Appears in the banner on every public page and can be dismissed |
+| 32 | Save a draft | Stored, not delivered |
+| 33 | Edit site content | Saving updates the public pages without a redeploy |
+| 34 | Chatbot knowledge | Adding an entry changes what the assistant answers on the next question |
+| 35 | Audit log | Every action above is recorded with a timestamp |
+
+### Cross-cutting
+
+| # | Flow | Expected |
+| --- | --- | --- |
+| 36 | Mobile at 390px | No horizontal scroll; sidebar becomes a drawer; tap targets ≥ 44px |
+| 37 | Keyboard only | Skip link works; every control reachable; focus is always visible |
+| 38 | Reduced motion | With the OS setting on, reveals/parallax/cursor glow are disabled |
+| 39 | Empty states | Deleting all videos/images/audio shows the designed empty states, not blank space |
+| 40 | Error states | With the network throttled or Supabase paused, pages show retry affordances rather than blank screens |
+| 41 | Unconfigured build | With the env vars removed the site still renders in demo mode with the Demo mode banner instead of crashing |
+
+---
+
+## Quick reset
+
+To start the content over without touching accounts:
+
+```sql
+truncate public.videos, public.gallery_items, public.audio_tracks,
+         public.messages, public.broadcasts, public.broadcast_deliveries,
+         public.sponsorship_leads, public.audit_logs;
+-- keep profiles and site_content, or truncate those too and re-run supabase/seed.sql
+```
+
+Storage objects must be deleted from **Storage → gallery / audio** in the dashboard.
