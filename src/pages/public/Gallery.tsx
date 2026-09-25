@@ -1,171 +1,119 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, ChevronLeft, ChevronRight, Images } from "lucide-react";
-import { Section, Card, Badge } from "../../components/ui/Section";
-import { Button } from "../../components/ui/Button";
-import { LoadingState, ErrorState, EmptyState } from "../../components/ui/States";
+import { Images } from "lucide-react";
 import { useSeo } from "../../hooks/useSeo";
-import {
-  fetchPublishedAlbums,
-  fetchAlbumImages,
-} from "../../services/publicContent";
-import { formatDate } from "../../lib/utils";
+import { useSiteContent } from "../../hooks/useSiteContent";
+import { fetchPublishedGallery } from "../../services/content";
+import { DEFAULT_SITE_CONTENT } from "../../lib/siteContent";
+import { Button } from "../../components/ui/Button";
+import { FilterChips } from "../../components/ui/Section";
+import { EmptyState, ErrorState, SkeletonGrid } from "../../components/ui/States";
+import { Reveal } from "../../components/Reveal";
+import { GalleryGrid, Lightbox } from "../../components/GalleryGrid";
 
 export default function Gallery() {
-  useSeo("Gallery — Bokaro Defence Academy", "Photos from classrooms, training sessions and academy life.");
-  const { data: albums, isLoading, isError, refetch } = useQuery({
-    queryKey: ["albums", "page"],
-    queryFn: fetchPublishedAlbums,
+  const { data: content = DEFAULT_SITE_CONTENT } = useSiteContent();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["public-gallery"],
+    queryFn: fetchPublishedGallery,
   });
 
-  const [lightboxAlbum, setLightboxAlbum] = useState<string | null>(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const imagesQ = useQuery({
-    queryKey: ["album-images", lightboxAlbum],
-    queryFn: () => fetchAlbumImages(lightboxAlbum!),
-    enabled: Boolean(lightboxAlbum),
+  const [category, setCategory] = useState("All");
+  const [index, setIndex] = useState<number | null>(null);
+
+  useSeo({
+    title: `Gallery — ${content.brandName}`,
+    description:
+      "Artwork, screenshots and behind-the-scenes images from Arian's gaming videos, organised by category.",
   });
 
-  const images = imagesQ.data ?? [];
-  const current = images[lightboxIndex];
+  const items = useMemo(() => data ?? [], [data]);
+
+  // Categories come from what is actually published, so the filter row never
+  // offers an empty bucket.
+  const categories = useMemo(() => {
+    const found = new Set<string>();
+    for (const item of items) if (item.category) found.add(item.category);
+    return ["All", ...Array.from(found).sort()];
+  }, [items]);
+
+  const filtered = useMemo(
+    () => (category === "All" ? items : items.filter((item) => item.category === category)),
+    [items, category]
+  );
 
   return (
-    <>
-      <section className="bg-navy py-12 text-white lg:py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-saffron-soft">Gallery</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold sm:text-4xl">Life at the academy</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/75 sm:text-base">
-            Classrooms, study sessions, fitness training and moments from academy life.
+    <div className="shell py-14 sm:py-20">
+      <Reveal>
+        <header className="max-w-3xl">
+          <p className="eyebrow mb-5">Gallery</p>
+          <h1 className="font-display text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink text-balance sm:text-5xl">
+            Artwork, screenshots and the work behind the videos.
+          </h1>
+          <p className="mt-5 text-[15px] leading-relaxed text-muted text-pretty">
+            Everything here was uploaded by Arian and is published with permission. Open any image for the full
+            view — arrow keys move between them.
           </p>
-        </div>
-      </section>
+        </header>
+      </Reveal>
 
-      <Section tone="offwhite">
-        {isLoading ? (
-          <LoadingState label="Loading gallery…" />
-        ) : isError ? (
-          <ErrorState onRetry={() => refetch()} />
-        ) : albums && albums.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {albums.map((album) => (
-              <Card key={album.id} className="overflow-hidden">
-                <button
-                  type="button"
-                  className="block w-full text-left"
-                  onClick={() => {
-                    setLightboxAlbum(album.id);
-                    setLightboxIndex(0);
-                  }}
-                  aria-label={`Open album: ${album.title}`}
-                >
-                  <div className="aspect-[4/3] bg-navy/[0.06]">
-                    {album.cover_image_url ? (
-                      <img
-                        src={album.cover_image_url}
-                        alt={album.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-navy/30">
-                        <Images className="h-10 w-10" aria-hidden />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="font-display text-base font-bold text-navy">{album.title}</h2>
-                      {album.category && <Badge tone="gray">{album.category}</Badge>}
-                    </div>
-                    {album.description && <p className="mt-1 line-clamp-2 text-sm text-muted">{album.description}</p>}
-                    {album.event_date && <p className="mt-1 text-xs text-muted">{formatDate(album.event_date)}</p>}
-                  </div>
-                </button>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={<Images className="h-8 w-8 text-muted/60" aria-hidden />}
-            title="Gallery coming soon"
-            hint="Photographs from the academy will be published here."
-          />
-        )}
-      </Section>
-
-      {/* Empty album feedback — clicking an album with no photos must not look broken */}
-      {lightboxAlbum && !imagesQ.isLoading && images.length === 0 && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-dark/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Album is empty"
-          onClick={() => setLightboxAlbum(null)}
-        >
-          <div className="max-w-sm rounded-xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <Images className="mx-auto h-8 w-8 text-muted/60" aria-hidden />
-            <p className="mt-3 font-display text-base font-bold text-navy">No photos in this album yet</p>
-            <p className="mt-1 text-sm text-muted">Photos added by the academy will appear here.</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => setLightboxAlbum(null)}>
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Lightbox */}
-      {lightboxAlbum && current && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-dark/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image viewer"
-          onClick={() => setLightboxAlbum(null)}
-        >
-          <div className="relative max-h-full w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={current.url}
-              alt={current.alt_text ?? current.caption ?? "Gallery image"}
-              className="max-h-[75vh] w-full rounded-xl object-contain"
+      {categories.length > 1 && (
+        <Reveal delay={0.08}>
+          <div className="mt-9">
+            <p className="mb-2 text-2xs font-semibold uppercase tracking-[0.18em] text-faint">
+              Filter by category
+            </p>
+            <FilterChips
+              label="Filter gallery by category"
+              options={categories}
+              value={category}
+              onChange={setCategory}
             />
-            {(current.caption || current.alt_text) && (
-              <p className="mt-3 text-center text-sm text-white/80">{current.caption ?? current.alt_text}</p>
-            )}
-            {images.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  aria-label="Previous image"
-                  onClick={() => setLightboxIndex((i) => (i - 1 + images.length) % images.length)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white hover:bg-white/25"
-                >
-                  <ChevronLeft className="h-5 w-5" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next image"
-                  onClick={() => setLightboxIndex((i) => (i + 1) % images.length)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/15 p-3 text-white hover:bg-white/25"
-                >
-                  <ChevronRight className="h-5 w-5" aria-hidden />
-                </button>
-                <p className="mt-2 text-center text-xs text-white/60">
-                  {lightboxIndex + 1} / {images.length}
-                </p>
-              </>
-            )}
-            <button
-              type="button"
-              aria-label="Close viewer"
-              onClick={() => setLightboxAlbum(null)}
-              className="absolute -top-2 right-0 translate-y-[-100%] rounded-full bg-white/15 p-2 text-white hover:bg-white/25 sm:-right-2"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
           </div>
-        </div>
+        </Reveal>
       )}
-    </>
+
+      <div className="mt-8">
+        {isLoading ? (
+          <SkeletonGrid count={6} className="sm:grid-cols-2 lg:grid-cols-3" />
+        ) : isError ? (
+          <ErrorState
+            title="The gallery could not load"
+            hint="Something went wrong fetching the images."
+            onRetry={() => void refetch()}
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<Images className="h-5 w-5 text-faint" aria-hidden />}
+            title="The gallery is empty"
+            hint="Images uploaded in the studio appear here automatically, in an editorial grid."
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title="Nothing in this category yet"
+            hint="Try another category."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setCategory("All")}>
+                Show everything
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <p className="mb-5 text-xs text-faint" aria-live="polite">
+              {filtered.length} image{filtered.length === 1 ? "" : "s"}
+            </p>
+            <GalleryGrid items={filtered} onOpen={setIndex} />
+          </>
+        )}
+      </div>
+
+      <Lightbox
+        items={filtered}
+        index={index}
+        onClose={() => setIndex(null)}
+        onIndexChange={setIndex}
+      />
+    </div>
   );
 }

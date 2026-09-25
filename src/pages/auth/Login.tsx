@@ -1,133 +1,206 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Loader2, Mail, Sparkles } from "lucide-react";
+import { AuthNotice, AuthShell } from "../../components/AuthShell";
 import { Button } from "../../components/ui/Button";
-import { loginSchema, type LoginInput } from "../../validation/schemas";
-import { signIn } from "../../services/auth";
-import { useAuth } from "../../hooks/useAuth";
+import { Field } from "../../components/ui/Field";
+import { loginSchema, magicLinkSchema, type LoginInput } from "../../validation/schemas";
+import { getCurrentUser, getProfile, sendMagicLink, signInWithPassword } from "../../services/auth";
+import { homePathFor, useAuth } from "../../hooks/useAuth";
+import { useSeo } from "../../hooks/useSeo";
+import { errorMessage } from "../../lib/utils";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
+import { useToast } from "../../components/ui/Toast";
 
 export default function Login() {
+  const { session, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { session, profile, loading } = useAuth();
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const { push } = useToast();
+  const returnTo = params.get("returnTo");
 
-  const returnTo =
-    (location.state as { returnTo?: string } | null)?.returnTo ?? null;
+  const [error, setError] = useState<string | null>(null);
+  const [magicSent, setMagicSent] = useState(false);
+  const [magicBusy, setMagicBusy] = useState(false);
+
+  useSeo({
+    title: "Sign in — Arian",
+    description: "Sign in to your client dashboard or the admin studio.",
+    noIndex: true,
+  });
 
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
+  // Already signed in: send them where they were heading.
   useEffect(() => {
-    if (!loading && session && profile) {
-      const dash: Record<string, string> = {
-        super_admin: "/admin",
-        admin: "/admin",
-        teacher: "/teacher",
-        student: "/student",
-      };
-      navigate(returnTo ?? dash[profile.role] ?? "/", { replace: true });
-    }
-  }, [session, profile, loading, navigate, returnTo]);
+    if (authLoading || !session) return;
+    navigate(returnTo ?? homePathFor(profile?.role ?? "client"), { replace: true });
+  }, [authLoading, session, profile, returnTo, navigate]);
 
-  const onSubmit = handleSubmit(async (values) => {
+  const onSubmit = async (values: LoginInput) => {
     setError(null);
-    const { error: err } = await signIn(values.email, values.password);
-    if (err) {
+    try {
+      const { error: signInError } = await signInWithPassword(values.email, values.password);
+      if (signInError) throw signInError;
+
+      // The role decides the destination, and it is read from the database —
+      // never from anything the browser supplied.
+      const user = await getCurrentUser();
+      const account = user ? await getProfile(user.id) : null;
+      const destination = returnTo ?? homePathFor(account?.role ?? "client");
+
+      push({ title: "Signed in", description: "Welcome back.", variant: "success" });
+      navigate(destination, { replace: true });
+    } catch (caught) {
+      const message = errorMessage(caught, "Sign in failed. Check your details and try again.");
       setError(
-        err.message === "Invalid login credentials"
-          ? "Incorrect email or password. Please try again."
-          : "Could not sign in. Please check your connection and try again."
+        /invalid login credentials/i.test(message)
+          ? "That email and password combination did not match. Check both, or reset your password."
+          : /email not confirmed/i.test(message)
+            ? "Please confirm your email address first — check your inbox for the verification link."
+            : message
       );
     }
-  });
+  };
+
+  const onMagicLink = async () => {
+    setError(null);
+    const parsed = magicLinkSchema.safeParse({ email: getValues("email") });
+    if (!parsed.success) {
+      setError("Enter your email address first, then request the sign-in link.");
+      return;
+    }
+    setMagicBusy(true);
+    try {
+      const { error: otpError } = await sendMagicLink(parsed.data.email);
+      if (otpError) throw otpError;
+      setMagicSent(true);
+    } catch (caught) {
+      setError(errorMessage(caught, "The sign-in link could not be sent."));
+    } finally {
+      setMagicBusy(false);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen flex-col bg-navy-dark">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-12">
-        <Link to="/" className="mx-auto flex items-center gap-2.5 text-white">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10">
-            <LogIn className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="font-display text-lg font-bold">Bokaro Defence Academy</span>
-        </Link>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to read messages from Arian, manage your sponsorship enquiries, or open the studio."
+      footer={
+        <p className="text-sm text-muted">
+          No account yet?{" "}
+          <Link to="/signup" className="font-semibold text-cyan underline-offset-2 hover:underline">
+            Create one
+          </Link>{" "}
+          — new accounts are approved by Arian before messaging unlocks.
+        </p>
+      }
+    >
+      {!isSupabaseConfigured ? (
+        <AuthNotice tone="error">
+          Authentication is not connected yet. Add <code>VITE_SUPABASE_URL</code> and{" "}
+          <code>VITE_SUPABASE_ANON_KEY</code>, apply the Supabase migrations, then reload.
+        </AuthNotice>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+          <Field label="Email" htmlFor="login-email" error={errors.email?.message} required>
+            <input
+              id="login-email"
+              type="email"
+              className="input"
+              autoComplete="email"
+              autoFocus
+              {...register("email")}
+            />
+          </Field>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white p-6 shadow-lift sm:p-8">
-          <h1 className="font-display text-2xl font-extrabold text-navy">Student Login</h1>
-          <p className="mt-1 text-sm text-muted">
-            Sign in with the email and password provided by the academy office.
-          </p>
+          <Field label="Password" htmlFor="login-password" error={errors.password?.message} required>
+            <input
+              id="login-password"
+              type="password"
+              className="input"
+              autoComplete="current-password"
+              {...register("password")}
+            />
+          </Field>
 
-          <form className="mt-6 space-y-4" onSubmit={onSubmit} noValidate>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-ink">Email</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                className="input"
-                placeholder="you@example.com"
-                {...register("email")}
-              />
-              {errors.email && <p role="alert" className="mt-1 text-xs font-medium text-error">{errors.email.message}</p>}
-            </div>
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-ink">Password</label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  className="input pr-11"
-                  placeholder="Your password"
-                  {...register("password")}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-navy"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
-                </button>
-              </div>
-              {errors.password && <p role="alert" className="mt-1 text-xs font-medium text-error">{errors.password.message}</p>}
-            </div>
-
-            {error && (
-              <p role="alert" className="rounded-lg border border-error/25 bg-error/[0.05] px-4 py-3 text-sm text-error">
-                {error}
-              </p>
-            )}
-
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Signing in…</>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <Link to="/auth/forgot-password" className="font-semibold text-navy hover:underline">
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              to="/forgot-password"
+              className="text-xs font-semibold text-muted underline-offset-2 transition-colors hover:text-ink hover:underline"
+            >
               Forgot password?
             </Link>
-            <Link to="/" className="text-muted hover:text-navy">
-              ← Back to website
+            <Link
+              to="/signup"
+              className="text-xs font-semibold text-muted underline-offset-2 transition-colors hover:text-ink hover:underline sm:hidden"
+            >
+              Create account
             </Link>
           </div>
-        </div>
-      </div>
-    </div>
+
+          {error && <AuthNotice tone="error">{error}</AuthNotice>}
+          {magicSent && (
+            <AuthNotice tone="success">
+              A one-time sign-in link is on its way to your inbox. Open it on this device to finish signing in.
+            </AuthNotice>
+          )}
+
+          <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </Button>
+
+          <div className="flex items-center gap-3 text-2xs uppercase tracking-[0.2em] text-faint">
+            <span className="h-px flex-1 bg-hairline" />
+            or
+            <span className="h-px flex-1 bg-hairline" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={() => void onMagicLink()}
+            disabled={magicBusy}
+          >
+            {magicBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Sending link…
+              </>
+            ) : (
+              <>
+                <Mail className="h-4 w-4" aria-hidden />
+                Email me a sign-in link
+              </>
+            )}
+          </Button>
+
+          <p className="flex items-start gap-2 rounded-xl border border-hairline bg-white/[0.02] px-3.5 py-3 text-2xs leading-relaxed text-faint">
+            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet" aria-hidden />
+            Magic links only work for accounts that already exist — they do not create one, so they cannot skip
+            the approval step.
+          </p>
+        </form>
+      )}
+    </AuthShell>
   );
 }

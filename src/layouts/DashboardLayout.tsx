@@ -1,215 +1,286 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  LayoutDashboard,
-  BookOpen,
-  Users,
-  GraduationCap,
-  ClipboardList,
-  CalendarCheck,
-  FileQuestion,
-  Inbox,
-  MessageSquare,
-  Megaphone,
-  Trophy,
-  Quote,
-  Images,
-  HelpCircle,
-  PanelTop,
-  Settings,
-  ScrollText,
-  Menu,
-  X,
-  LogOut,
-  Home,
-  CalendarRange,
-  FolderOpen,
   BarChart3,
-  Award,
+  ChevronLeft,
+  Clapperboard,
+  Home,
+  Images,
+  Inbox,
+  LayoutDashboard,
+  LogOut,
+  Megaphone,
+  Menu,
+  MessageSquare,
+  Music4,
+  PanelLeftClose,
+  Send,
+  Settings,
+  UserRound,
+  Users,
+  Video,
 } from "lucide-react";
+import { cn, initialsOf } from "../lib/utils";
 import { useAuth } from "../hooks/useAuth";
-import { useSiteSettings } from "../hooks/useSiteSettings";
-import { AcademyLogo } from "../components/AcademyLogo";
-import { cn } from "../lib/utils";
-import type { AppRole } from "../types";
+import { useSiteContent } from "../hooks/useSiteContent";
+import { Wordmark } from "../components/Wordmark";
+import { Badge } from "../components/ui/Section";
+import { DEFAULT_SITE_CONTENT } from "../lib/siteContent";
+import type { ClientStatus } from "../types";
 
-type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; end?: boolean };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  end?: boolean;
+};
 
 const ADMIN_NAV: NavItem[] = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/admin/courses", label: "Courses", icon: BookOpen },
-  { to: "/admin/batches", label: "Batches", icon: CalendarRange },
-  { to: "/admin/students", label: "Students", icon: Users },
-  { to: "/admin/teachers", label: "Teachers", icon: GraduationCap },
-  { to: "/admin/inquiries", label: "Inquiries", icon: Inbox },
-  { to: "/admin/notices", label: "Notices", icon: Megaphone },
-  { to: "/admin/achievements", label: "Achievements", icon: Trophy },
-  { to: "/admin/testimonials", label: "Testimonials", icon: Quote },
   { to: "/admin/gallery", label: "Gallery", icon: Images },
-  { to: "/admin/faqs", label: "FAQs & Chatbot", icon: HelpCircle },
-  { to: "/admin/site-content", label: "Website Content", icon: PanelTop },
-  { to: "/admin/site-settings", label: "Site Settings", icon: Settings },
-  { to: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
+  { to: "/admin/videos", label: "Videos", icon: Video },
+  { to: "/admin/audio", label: "Audio", icon: Music4 },
+  { to: "/admin/media", label: "Background media", icon: Clapperboard },
+  { to: "/admin/clients", label: "Clients", icon: Users },
+  { to: "/admin/messages", label: "Messages", icon: Inbox },
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
+  { to: "/admin/settings", label: "Content & settings", icon: Settings },
 ];
 
-const TEACHER_NAV: NavItem[] = [
-  { to: "/teacher", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/teacher/attendance", label: "Attendance", icon: CalendarCheck },
-  { to: "/teacher/tests", label: "Tests & Marks", icon: ClipboardList },
-  { to: "/teacher/assignments", label: "Assignments", icon: FileQuestion },
-  { to: "/teacher/resources", label: "Resources", icon: FolderOpen },
+const CLIENT_NAV: NavItem[] = [
+  { to: "/dashboard", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/dashboard/messages", label: "Messages from Arian", icon: MessageSquare },
+  { to: "/dashboard/contact", label: "Message Arian", icon: Send },
+  { to: "/dashboard/sponsor", label: "Sponsor Arian", icon: BarChart3 },
+  { to: "/dashboard/profile", label: "Profile", icon: UserRound },
 ];
 
-const STUDENT_NAV: NavItem[] = [
-  { to: "/student", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/student/assignments", label: "Assignments", icon: FileQuestion },
-  { to: "/student/resources", label: "Resources", icon: FolderOpen },
-  { to: "/student/results", label: "Results", icon: BarChart3 },
-  { to: "/student/attendance", label: "Attendance", icon: CalendarCheck },
-  { to: "/student/messages", label: "Messages", icon: MessageSquare },
-  { to: "/student/profile", label: "Profile", icon: Award },
-];
+const STATUS_TONE: Record<ClientStatus, "jade" | "amber" | "coral" | "neutral"> = {
+  active: "jade",
+  pending: "amber",
+  suspended: "neutral",
+  banned: "coral",
+};
 
-export default function DashboardLayout({ area }: { area: "admin" | "teacher" | "student" }) {
-  const { profile, role, signOut } = useAuth();
-  const { data: settings } = useSiteSettings();
+const STATUS_LABEL: Record<ClientStatus, string> = {
+  active: "Active",
+  pending: "Pending",
+  suspended: "Suspended",
+  banned: "Banned",
+};
+
+const COLLAPSE_KEY = "arian.sidebar-collapsed";
+
+export default function DashboardLayout({ area }: { area: "admin" | "client" }) {
+  const { profile, status, signOut } = useAuth();
+  const { data: content = DEFAULT_SITE_CONTENT } = useSiteContent();
   const navigate = useNavigate();
+  const location = useLocation();
+  const reduced = useReducedMotion();
+  const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const nav = area === "admin" ? ADMIN_NAV : area === "teacher" ? TEACHER_NAV : STUDENT_NAV;
-  const areaLabel = area === "admin" ? "Admin" : area === "teacher" ? "Faculty" : "Student";
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "true");
+  }, []);
 
-  const allowed = (r: AppRole | null) => r === "super_admin" || r === "admin" || r === "teacher" || r === "student";
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((value) => {
+      window.localStorage.setItem(COLLAPSE_KEY, String(!value));
+      return !value;
+    });
+  };
+
+  const nav = area === "admin" ? ADMIN_NAV : CLIENT_NAV;
+  const areaLabel = area === "admin" ? "Studio" : "Dashboard";
 
   async function handleSignOut() {
     await signOut();
     navigate("/");
   }
 
-  const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <nav aria-label={`${areaLabel} menu`} className="flex flex-col gap-1">
-      {nav
-        .filter(() => allowed(role))
-        .map((item) => (
+  const SidebarContent = ({ compact, onNavigate }: { compact: boolean; onNavigate?: () => void }) => (
+    <>
+      <div className="flex h-[68px] items-center gap-2.5 border-b border-hairline px-4">
+        <Link to="/" aria-label="Back to the public site" onClick={onNavigate}>
+          <Wordmark name={content.brandName} size={34} compact={compact} />
+        </Link>
+        {!compact && (
+          <Badge tone={area === "admin" ? "violet" : "cyan"} className="ml-auto">
+            {areaLabel}
+          </Badge>
+        )}
+      </div>
+
+      <nav aria-label={`${areaLabel} navigation`} className="scroll-thin flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             onClick={onNavigate}
+            title={compact ? item.label : undefined}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-saffron/10 font-semibold text-navy"
-                  : "text-ink/75 hover:bg-navy/[0.05] hover:text-navy"
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200",
+                isActive ? "bg-white/[0.08] text-ink" : "text-muted hover:bg-white/[0.04] hover:text-ink",
+                compact && "justify-center px-0"
               )
             }
           >
-            <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
-            {item.label}
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId={`${area}-nav-indicator`}
+                    className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-gradient-to-b from-cyan to-blue"
+                    transition={{ duration: reduced ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                )}
+                <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                {!compact && <span className="truncate">{item.label}</span>}
+              </>
+            )}
           </NavLink>
         ))}
-    </nav>
+      </nav>
+
+      <div className="space-y-1 border-t border-hairline p-3">
+        <Link
+          to="/"
+          className={cn(
+            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted transition-colors hover:bg-white/[0.04] hover:text-ink",
+            compact && "justify-center px-0"
+          )}
+          title={compact ? "View website" : undefined}
+        >
+          <Home className="h-[18px] w-[18px] shrink-0" aria-hidden />
+          {!compact && "View website"}
+        </Link>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted transition-colors hover:bg-coral/[0.08] hover:text-coral",
+            compact && "justify-center px-0"
+          )}
+          title={compact ? "Sign out" : undefined}
+        >
+          <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden />
+          {!compact && "Sign out"}
+        </button>
+      </div>
+    </>
   );
 
   return (
-    <div className="flex min-h-screen bg-offwhite">
+    <div className="flex min-h-screen bg-base">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-lightgray bg-white lg:flex">
-        <div className="flex h-16 items-center gap-2.5 border-b border-lightgray px-4">
-          <AcademyLogo logoUrl={settings?.logo_url ?? null} className="h-9 w-9" />
-          <div className="min-w-0">
-            <p className="truncate font-display text-sm font-bold text-navy">
-              {settings?.academy_name ?? "Bokaro Defence Academy"}
-            </p>
-            <p className="text-[11px] font-medium text-muted">{areaLabel} portal</p>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <NavLinks />
-        </div>
-        <div className="border-t border-lightgray p-3">
-          <NavLink
-            to="/"
-            className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink/70 hover:bg-navy/[0.05]"
-          >
-            <Home className="h-[18px] w-[18px]" aria-hidden />
-            View website
-          </NavLink>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink/70 hover:bg-error/[0.06] hover:text-error"
-          >
-            <LogOut className="h-[18px] w-[18px]" aria-hidden />
-            Sign out
-          </button>
-        </div>
-      </aside>
+      <motion.aside
+        animate={{ width: collapsed ? 80 : 264 }}
+        initial={false}
+        transition={{ duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+        className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-hairline bg-panel/80 backdrop-blur-xl lg:flex"
+      >
+        <SidebarContent compact={collapsed} />
+      </motion.aside>
 
       {/* Mobile drawer */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-          <button
-            type="button"
-            className="absolute inset-0 bg-navy-dark/50"
-            onClick={() => setDrawerOpen(false)}
-            aria-label="Close menu overlay"
-            tabIndex={-1}
-          />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white shadow-lift">
-            <div className="flex h-16 items-center justify-between border-b border-lightgray px-4">
-              <p className="font-display font-bold text-navy">{areaLabel} menu</p>
-              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close menu" className="rounded p-2 hover:bg-navy/[0.06]">
-                <X className="h-5 w-5" aria-hidden />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-3 py-4">
-              <NavLinks onNavigate={() => setDrawerOpen(false)} />
-            </div>
-            <div className="border-t border-lightgray p-3">
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-error"
-              >
-                <LogOut className="h-[18px] w-[18px]" aria-hidden />
-                Sign out
-              </button>
-            </div>
+      <AnimatePresence>
+        {drawerOpen && (
+          <div className="fixed inset-0 z-[70] lg:hidden">
+            <motion.button
+              type="button"
+              aria-label="Close menu"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDrawerOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${areaLabel} navigation`}
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: reduced ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-y-0 left-0 flex w-[17.5rem] flex-col border-r border-hairline bg-panel"
+            >
+              <SidebarContent compact={false} onNavigate={() => setDrawerOpen(false)} />
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-lightgray bg-white/95 px-4 backdrop-blur lg:px-6">
-          <div className="flex items-center gap-2">
+        <header className="sticky top-0 z-40 flex h-[68px] items-center justify-between gap-3 border-b border-hairline bg-base/75 px-4 backdrop-blur-xl lg:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="rounded-lg p-2 text-navy hover:bg-navy/[0.06] lg:hidden"
               aria-label="Open menu"
+              className="rounded-xl border border-hairline p-2.5 text-ink transition-colors hover:bg-white/5 lg:hidden"
             >
-              <Menu className="h-6 w-6" aria-hidden />
+              <Menu className="h-5 w-5" aria-hidden />
             </button>
-            <p className="font-display text-base font-bold text-navy">
-              {areaLabel} Portal
-            </p>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="hidden rounded-xl border border-hairline p-2.5 text-muted transition-colors hover:bg-white/5 hover:text-ink lg:inline-flex"
+            >
+              {collapsed ? <ChevronLeft className="h-4 w-4 rotate-180" aria-hidden /> : <PanelLeftClose className="h-4 w-4" aria-hidden />}
+            </button>
+            <h1 className="truncate font-display text-sm font-semibold text-ink sm:text-base">
+              {area === "admin" ? `${content.brandName} studio` : `Welcome back`}
+            </h1>
           </div>
+
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted sm:inline">
-              {profile?.full_name ?? profile?.email ?? ""}
-            </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy font-display text-sm font-bold text-white" aria-hidden>
-              {(profile?.full_name ?? "U").slice(0, 1).toUpperCase()}
-            </span>
+            {status && area === "client" && (
+              <Badge tone={STATUS_TONE[status]} className="hidden sm:inline-flex">
+                {STATUS_LABEL[status]}
+              </Badge>
+            )}
+            {status && area === "admin" && (
+              <Badge tone="violet" className="hidden sm:inline-flex">
+                Admin
+              </Badge>
+            )}
+            <div className="flex items-center gap-2.5">
+              <span className="hidden max-w-[12rem] truncate text-sm text-muted sm:inline">
+                {profile?.full_name || profile?.email}
+              </span>
+              <span
+                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-hairline bg-gradient-to-br from-blue/30 to-violet/30 font-display text-xs font-bold text-ink"
+                aria-hidden
+              >
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initialsOf(profile?.full_name || profile?.email || "?")
+                )}
+              </span>
+            </div>
           </div>
         </header>
 
-        <main id="main" className="flex-1 px-4 py-6 lg:px-6">
+        <main id="main" className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
+
+      {/* Screen-reader-only route announcer */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {location.pathname.replace(/\//g, " ")}
+      </span>
     </div>
   );
 }

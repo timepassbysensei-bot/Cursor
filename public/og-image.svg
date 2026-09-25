@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Arian — Gaming, stories, lore, and the worlds behind the screen">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#52D6E8" />
+      <stop offset="0.55" stop-color="#5E9FE8" />
+      <stop offset="1" stop-color="#9B7CFF" />
+    </linearGradient>
+    <radialGradient id="p1" cx="14%" cy="4%" r="60%">
+      <stop offset="0" stop-color="#5E9FE8" stop-opacity="0.34" />
+      <stop offset="1" stop-color="#5E9FE8" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="p2" cx="92%" cy="10%" r="62%">
+      <stop offset="0" stop-color="#9B7CFF" stop-opacity="0.3" />
+      <stop offset="1" stop-color="#9B7CFF" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M80 0H0V80" fill="none" stroke="#F7F8FC" stroke-opacity="0.05" />
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="#080B14" />
+  <rect width="1200" height="630" fill="url(#p1)" />
+  <rect width="1200" height="630" fill="url(#p2)" />
+  <rect width="1200" height="630" fill="url(#grid)" />
+
+  <g transform="translate(96 96)">
+    <rect width="76" height="76" rx="20" fill="#101625" stroke="#F7F8FC" stroke-opacity="0.1" />
+    <g transform="translate(19 19)" fill="none" stroke="url(#g)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 34 L19 3 L35 34" />
+      <path d="M9.5 24 H28.5" />
+    </g>
+  </g>
+
+  <text x="96" y="298" font-family="Sora, Inter, system-ui, sans-serif" font-size="118" font-weight="600" letter-spacing="-4" fill="#F7F8FC">Arian</text>
+
+  <text x="96" y="374" font-family="Inter, system-ui, sans-serif" font-size="37" fill="#98A3B8">Gaming, stories, lore, and the worlds</text>
+  <text x="96" y="424" font-family="Inter, system-ui, sans-serif" font-size="37" fill="#98A3B8">behind the screen.</text>
+
+  <g transform="translate(96 496)">
+    <rect width="318" height="52" rx="26" fill="none" stroke="#52D6E8" stroke-opacity="0.45" />
+    <text x="26" y="34" font-family="Inter, system-ui, sans-serif" font-size="21" fill="#52D6E8">Genshin Impact · Wuthering Waves</text>
+  </g>
+
+  <text x="96" y="596" font-family="Inter, system-ui, sans-serif" font-size="22" fill="#6B7691">Lore explained · Builds · Banner advice · Beginner guides · Hindi</text>
+
+  <rect x="0" y="0" width="1200" height="4" fill="url(#g)" opacity="0.8" />
+</svg>

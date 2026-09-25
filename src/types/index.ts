@@ -1,233 +1,207 @@
-export type AppRole = "super_admin" | "admin" | "teacher" | "student";
+export type AppRole = "visitor" | "client" | "admin";
+
+/**
+ * Access level on a client account. `pending` can sign in but sees an
+ * approval notice; `active` has full access; `suspended` and `banned` are
+ * blocked from client data by RLS as well as by the route guards.
+ */
+export type ClientStatus = "pending" | "active" | "suspended" | "banned";
+
+export type MessageType = "contact" | "sponsorship" | "client" | "admin_reply";
+
+export type BroadcastAudience = "single_client" | "all_clients" | "public_announcement";
+
+export type BroadcastStatus = "draft" | "sent";
+
+export type DeliveryStatus = "delivered" | "read";
+
+export type SponsorStatus =
+  | "new"
+  | "reviewing"
+  | "in_talks"
+  | "won"
+  | "declined"
+  | "spam";
 
 export interface Profile {
   id: string;
   email: string | null;
   full_name: string;
   role: AppRole;
-  is_active: boolean;
-  force_password_change: boolean;
-  avatar_url?: string | null;
-  phone?: string | null;
-  roll_number?: string | null;
+  status: ClientStatus;
+  avatar_url: string | null;
+  bio: string | null;
+  last_seen_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface Course {
+export interface Video {
   id: string;
-  slug: string;
+  youtube_url: string;
+  youtube_id: string;
   title: string;
-  short_description: string | null;
-  full_description: string | null;
+  description: string | null;
   thumbnail_url: string | null;
-  eligibility: string | null;
-  age_criteria: string | null;
+  game: string | null;
+  category: string | null;
   duration_text: string | null;
-  subjects: string[] | null;
-  batch_timings: string | null;
-  fees_text: string | null;
-  mode: string | null;
-  seats_text: string | null;
-  admission_status: "open" | "filling_fast" | "closed";
-  featured: boolean;
-  display_order: number;
-  prospectus_url: string | null;
-  status: "draft" | "published" | "archived";
+  published_at: string;
+  sort_order: number;
+  is_featured: boolean;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface Batch {
+export interface GalleryItem {
   id: string;
-  course_id: string;
-  name: string;
-  timing_text: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  capacity: number | null;
-  admission_status: "open" | "filling_fast" | "closed";
-  faculty_teacher_id: string | null;
-  status: "upcoming" | "ongoing" | "completed" | "archived";
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Notice {
-  id: string;
+  storage_path: string;
+  public_url: string;
   title: string;
-  description: string | null;
-  publish_date: string;
-  expiry_date: string | null;
-  attachment_url: string | null;
-  audience: "public" | "all_students" | "course" | "batch" | "teachers" | "admins";
-  course_id: string | null;
-  batch_id: string | null;
-  pinned: boolean;
-  status: "draft" | "published" | "archived";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Achievement {
-  id: string;
-  student_name: string;
-  photo_url: string | null;
-  examination: string | null;
-  result_text: string | null;
-  course_id: string | null;
-  year: number | null;
-  description: string | null;
-  featured: boolean;
-  consent_recorded: boolean;
-  status: "draft" | "published" | "archived";
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Testimonial {
-  id: string;
-  name: string;
-  photo_url: string | null;
-  course_text: string | null;
-  quote: string;
-  rating: number;
-  featured: boolean;
-  status: "draft" | "published" | "archived";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface GalleryAlbum {
-  id: string;
-  title: string;
-  description: string | null;
-  category: string | null;
-  event_date: string | null;
-  cover_image_url: string | null;
-  display_order: number;
-  status: "draft" | "published" | "archived";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface GalleryImage {
-  id: string;
-  album_id: string;
-  url: string;
   caption: string | null;
-  alt_text: string | null;
-  display_order: number;
-  created_at: string;
-}
-
-export interface Faq {
-  id: string;
-  question: string;
-  answer: string;
+  alt_text: string;
   category: string | null;
-  featured: boolean;
-  status: "draft" | "published" | "archived";
-  display_order: number;
+  width: number | null;
+  height: number | null;
+  sort_order: number;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export type InquiryStatus =
-  | "new"
-  | "contacted"
-  | "interested"
-  | "follow_up"
-  | "admitted"
-  | "closed"
-  | "spam";
-
-export interface Inquiry {
+export interface AudioTrack {
   id: string;
-  name: string;
-  email: string | null;
-  phone: string;
-  whatsapp: string | null;
-  city: string | null;
-  interested_course_id: string | null;
-  message: string | null;
-  source_page: string | null;
-  utm_source: string | null;
-  utm_medium: string | null;
-  utm_campaign: string | null;
-  status: InquiryStatus;
-  assigned_staff_id: string | null;
-  follow_up_date: string | null;
-  internal_notes: string | null;
+  storage_path: string;
+  public_url: string;
+  title: string;
+  artist: string | null;
+  file_size_bytes: number | null;
+  is_active: boolean;
   created_at: string;
+}
+
+export interface Message {
+  id: string;
+  sender_user_id: string | null;
+  sender_name: string;
+  sender_email: string;
+  recipient_user_id: string | null;
+  message_type: MessageType;
+  subject: string;
+  body: string;
+  is_read: boolean;
+  is_archived: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface Broadcast {
+  id: string;
+  title: string;
+  body: string;
+  audience_type: BroadcastAudience;
+  recipient_user_id: string | null;
+  status: BroadcastStatus;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface BroadcastDelivery {
+  id: string;
+  broadcast_id: string;
+  recipient_user_id: string;
+  status: DeliveryStatus;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface SponsorshipLead {
+  id: string;
+  sender_user_id: string | null;
+  name: string;
+  email: string;
+  company: string | null;
+  website: string | null;
+  campaign_objective: string | null;
+  preferred_platform: string | null;
+  budget: string | null;
+  timeline: string | null;
+  message: string | null;
+  status: SponsorStatus;
+  is_archived: boolean;
+  created_at: string;
+}
+
+export interface SiteContentRow {
+  id: string;
+  content_key: string;
+  content_value: string;
   updated_at: string;
 }
 
-export interface FeatureFlags {
-  attendance_enabled: boolean;
-  ranking_enabled: boolean;
-  assignment_submissions_enabled: boolean;
-  chatbot_enabled: boolean;
-  floating_call_enabled: boolean;
-  floating_whatsapp_enabled: boolean;
-  floating_apply_enabled: boolean;
+export interface ChatKnowledgeRow {
+  id: string;
+  title: string;
+  content: string;
+  is_active: boolean;
+  updated_at: string;
 }
 
-export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  attendance_enabled: true,
-  ranking_enabled: false,
-  assignment_submissions_enabled: true,
-  chatbot_enabled: true,
-  floating_call_enabled: true,
-  floating_whatsapp_enabled: true,
-  floating_apply_enabled: true,
-};
+export interface AuditLogRow {
+  id: string;
+  admin_user_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
 
-export interface SiteSettings {
-  academy_name: string;
-  tagline: string | null;
-  logo_url: string | null;
-  favicon_url: string | null;
-  announcement_text: string | null;
-  announcement_enabled: boolean;
-  admission_status: "open" | "filling_fast" | "closed";
-  hero_eyebrow: string | null;
-  hero_heading: string | null;
-  hero_description: string | null;
-  hero_image_url: string | null;
-  hero_cta_apply_label: string | null;
-  hero_cta_courses_label: string | null;
-  about_overview: string | null;
-  about_mission: string | null;
-  about_vision: string | null;
-  about_teaching_approach: string | null;
-  director_message: string | null;
-  director_name: string | null;
-  director_title: string | null;
-  director_image_url: string | null;
-  admissions_intro: string | null;
-  admission_process: unknown;
-  required_documents: unknown;
-  eligibility_text: string | null;
-  scholarship_text: string | null;
-  contact_address: string | null;
-  contact_phone: string | null;
-  contact_phone_secondary: string | null;
-  contact_whatsapp: string | null;
-  contact_email: string | null;
-  contact_hours: string | null;
-  map_url: string | null;
-  map_embed_url: string | null;
-  facebook_url: string | null;
-  instagram_url: string | null;
-  youtube_url: string | null;
-  twitter_url: string | null;
-  footer_description: string | null;
-  seo_title: string | null;
-  seo_description: string | null;
-  og_image_url: string | null;
-  feature_flags: FeatureFlags;
-  updated_at: string;
+export interface TimelineEntry {
+  year: string;
+  title: string;
+  body: string;
+}
+
+/**
+ * The typed view of `site_content`. Every field is editable from
+ * Admin → Settings, and every default is a placeholder rather than a claim
+ * about Arian.
+ */
+export interface SiteContent {
+  brandName: string;
+  tagline: string;
+  footerNote: string;
+  heroEyebrow: string;
+  heroTitle: string;
+  heroStatement: string;
+  heroDescription: string;
+  heroPrimaryCta: string;
+  heroSecondaryCta: string;
+  aboutIntro: string;
+  aboutIdentity: string;
+  aboutGames: string[];
+  aboutCategories: string[];
+  aboutTimeline: TimelineEntry[];
+  aboutMessage: string;
+  featuredMessageActive: boolean;
+  featuredMessageTitle: string;
+  featuredMessageBody: string;
+  sponsorHeadline: string;
+  sponsorIntro: string;
+  sponsorFormats: string[];
+  sponsorDisclosure: string;
+  contactEmail: string;
+  contactResponseTime: string;
+  socialYouTube: string;
+  socialInstagram: string;
+  socialX: string;
+  socialDiscord: string;
+  chatbotIntro: string;
+  chatbotSuggestions: string[];
+  chatbotDisclaimer: string;
+  seoTitle: string;
+  seoDescription: string;
+  ogImageUrl: string;
 }

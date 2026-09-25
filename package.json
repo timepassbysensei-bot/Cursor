@@ -1,9 +1,9 @@
 {
-  "name": "bokaro-defence-academy",
+  "name": "arian-creator-platform",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Bokaro Defence Academy - public website and academy management system",
+  "description": "Arian — personal creator website, community inbox and admin studio for a gaming / gaming-storytelling YouTube channel",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",

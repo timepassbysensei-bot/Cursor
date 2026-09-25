@@ -1,139 +1,123 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, act } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-
-const h = vi.hoisted(() => ({ configured: false }));
-
-vi.mock("../../lib/supabaseClient", () => ({
-  get isSupabaseConfigured() {
-    return h.configured;
-  },
-  supabase: {
-    from: () => {
-      const proxy: unknown = new Proxy(
-        {},
-        {
-          get: (_t, prop) => {
-            if (prop === "then") {
-              return (resolve: (value: unknown) => void) => resolve({ data: null, error: null });
-            }
-            return () => proxy;
-          },
-        }
-      );
-      return proxy;
-    },
-    auth: {
-      getSession: async () => ({ data: { session: null } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    },
-    storage: { from: () => ({ upload: async () => ({ error: null }), getPublicUrl: () => ({ data: { publicUrl: "" } }) }) },
-    functions: { invoke: async () => ({ data: null, error: null }) },
-  },
-}));
-
 import Home from "./Home";
-import Contact from "./Contact";
-import Results from "./Results";
-import Courses from "./Courses";
+import Videos from "./Videos";
 import Gallery from "./Gallery";
-import Notices from "./Notices";
-import Admissions from "./Admissions";
+import About from "./About";
+import Contact from "./Contact";
+import Sponsor from "./Sponsor";
+import Privacy from "./Privacy";
+import Terms from "./Terms";
 import NotFound from "./NotFound";
-import { DatabaseSetupBanner } from "../../components/DatabaseSetupBanner";
-import { AuthProvider } from "../../hooks/useAuth";
 
 /**
- * Renders inside the providers the app uses. AuthProvider loads the session
- * asynchronously, so the initial render is wrapped in act() to keep state
- * updates inside React's test scheduling.
+ * These render the public pages without any environment variables configured,
+ * which is exactly demo mode: site copy comes from the built-in defaults and
+ * videos/gallery come from the sample set. They are a smoke test for "the page
+ * renders and its primary content is on the page", not a visual test.
  */
-async function wrap(ui: ReactNode) {
-  const client = new QueryClient({
+
+function renderPage(ui: ReactNode, route = "/") {
+  const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
-  let utils!: ReturnType<typeof render>;
-  await act(async () => {
-    utils = render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <AuthProvider>{ui}</AuthProvider>
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-  });
-  return utils;
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
-beforeEach(() => {
-  h.configured = false;
-});
+describe("public pages", () => {
+  it("renders the homepage hero, the brand statement and the channel link", async () => {
+    renderPage(<Home />);
 
-afterEach(() => {
-  cleanup();
-});
-
-describe("public pages render without crashing", () => {
-  it("renders the homepage with its hero and course section", async () => {
-    await wrap(<Home />);
     expect(
-      screen.getAllByRole("heading", { level: 1 }).some((el) => /defence/i.test(el.textContent ?? ""))
-    ).toBe(true);
-    expect(screen.getByText(/courses we prepare for/i)).toBeInTheDocument();
+      screen.getByRole("heading", { level: 1, name: "Arian" })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("Gaming, stories, lore, and the worlds behind the screen.")
+    ).toBeInTheDocument();
+
+    const channelLinks = screen.getAllByRole("link", { name: /watch on youtube/i });
+    expect(channelLinks.length).toBeGreaterThan(0);
+    expect(channelLinks[0]).toHaveAttribute("href", "https://www.youtube.com/@youknowArian");
+    expect(channelLinks[0]).toHaveAttribute("target", "_blank");
   });
 
-  it("renders the admissions page with a working inquiry form", async () => {
-    await wrap(<Admissions />);
-    expect(screen.getByRole("heading", { name: /admission inquiry/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /submit inquiry/i })).toBeInTheDocument();
-  });
-
-  it("renders courses, gallery, notices and results empty states", async () => {
-    await wrap(
-      <>
-        <Courses />
-        <Gallery />
-        <Notices />
-        <Results />
-      </>
-    );
-    expect(screen.getByRole("heading", { name: /our courses/i })).toBeInTheDocument();
-    // Query results settle asynchronously, so the empty states appear after a tick.
-    expect(await screen.findByText(/gallery coming soon/i)).toBeInTheDocument();
-    expect(await screen.findByText(/no active notices right now/i)).toBeInTheDocument();
-    expect(await screen.findByText(/results will appear here after publication/i)).toBeInTheDocument();
-  });
-
-  it("renders the contact page with the full FAQ section", async () => {
-    await wrap(<Contact />);
-    expect(screen.getByRole("heading", { name: /send a message/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /frequently asked questions/i })).toBeInTheDocument();
-  });
-
-  it("renders the 404 page with recovery links", async () => {
-    await wrap(<NotFound />);
-    expect(screen.getByRole("link", { name: /home/i })).toBeInTheDocument();
-  });
-});
-
-describe("database setup banner", () => {
-  it("is visible while credentials are missing", async () => {
-    h.configured = false;
-    await act(async () => {
-      render(<DatabaseSetupBanner />);
+  it("shows sample videos and a link to the full library in demo mode", async () => {
+    renderPage(<Home />);
+    await waitFor(() => {
+      expect(screen.getByText(/Latest from the channel/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/setup needed/i)).toBeInTheDocument();
-    expect(screen.getByText(/VITE_SUPABASE_URL/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view all videos/i })).toHaveAttribute("href", "/videos");
   });
 
-  it("disappears once the site is connected", async () => {
-    h.configured = true;
-    let container!: HTMLElement;
-    await act(async () => {
-      ({ container } = render(<DatabaseSetupBanner />));
-    });
-    expect(container).toBeEmptyDOMElement();
+  it("offers working filter controls on the video library", async () => {
+    renderPage(<Videos />, "/videos");
+
+    expect(screen.getByRole("heading", { level: 1, name: /Every video, searchable/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Search videos/i)).toBeInTheDocument();
+    // Mobile-first toolbar: game and category are labelled native selects
+    // (role=combobox), sort is a labelled button group. Everything fits a
+    // 360px viewport with no horizontal scrolling.
+    expect(screen.getByRole("combobox", { name: "Game" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Category" })).toBeInTheDocument();
+    // Both sort groups (mobile + desktop variants) are in the DOM; CSS decides
+    // which one is visible at the current viewport width.
+    expect(screen.getAllByRole("group", { name: /Sort videos/i }).length).toBeGreaterThan(0);
+  });
+
+  it("renders the gallery with accessible image alternatives", async () => {
+    renderPage(<Gallery />, "/gallery");
+    const images = await screen.findAllByRole("img");
+    expect(images.length).toBeGreaterThan(0);
+    // Every gallery image carries real alt text, never an empty string.
+    for (const image of images) {
+      expect(image.getAttribute("alt")?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it("renders the about page with the games covered", () => {
+    renderPage(<About />, "/about");
+    expect(screen.getByRole("heading", { level: 1, name: /Gaming stories, told the slow way/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Genshin Impact").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Wuthering Waves").length).toBeGreaterThan(0);
+  });
+
+  it("renders labelled, validated forms on contact and sponsor", () => {
+    const contact = renderPage(<Contact />, "/contact");
+    expect(screen.getByLabelText(/Your name/i)).toBeRequired();
+    expect(screen.getByLabelText(/Your email/i)).toBeRequired();
+    expect(screen.getByLabelText(/^Message/i)).toBeRequired();
+    expect(screen.getByRole("button", { name: /Send message/i })).toBeInTheDocument();
+    contact.unmount();
+
+    renderPage(<Sponsor />, "/sponsor");
+    expect(screen.getByLabelText(/Your name/i)).toBeRequired();
+    expect(screen.getByLabelText(/Campaign details/i)).toBeRequired();
+    expect(screen.getByRole("button", { name: /Send sponsorship enquiry/i })).toBeInTheDocument();
+  });
+
+  it("renders both legal pages with their sections", () => {
+    const privacy = renderPage(<Privacy />, "/privacy");
+    expect(screen.getByRole("heading", { level: 1, name: /Privacy policy/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /Cookies and tracking/i })).toBeInTheDocument();
+    privacy.unmount();
+
+    renderPage(<Terms />, "/terms");
+    expect(screen.getByRole("heading", { level: 1, name: /Terms of use/i })).toBeInTheDocument();
+    expect(screen.getByText(/not affiliated with, sponsored by, or endorsed/i)).toBeInTheDocument();
+  });
+
+  it("renders a helpful 404 with real destinations", () => {
+    renderPage(<NotFound />, "/nope");
+    expect(screen.getByRole("heading", { level: 1, name: /This page is not part of the story/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Back to the homepage/i })).toHaveAttribute("href", "/");
   });
 });

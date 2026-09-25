@@ -1,48 +1,76 @@
-import { Section } from "../../components/ui/Section";
+import { LegalDoc } from "../../components/LegalDoc";
 import { useSeo } from "../../hooks/useSeo";
+import { useSiteContent } from "../../hooks/useSiteContent";
+import { DEFAULT_SITE_CONTENT } from "../../lib/siteContent";
 
 export default function Terms() {
-  useSeo("Terms & Conditions — Bokaro Defence Academy");
+  const { data: content = DEFAULT_SITE_CONTENT } = useSiteContent();
+  useSeo({
+    title: `Terms of use — ${content.brandName}`,
+    description: "The rules for using this website, its forms, client accounts and Arian Assistant.",
+  });
+
   return (
-    <Section tone="offwhite">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="font-display text-3xl font-extrabold text-navy">Terms &amp; Conditions</h1>
-        <p className="mt-2 text-sm text-muted">Last updated: template version — academy to review before go-live.</p>
-        <div className="mt-8 space-y-6 text-sm leading-relaxed text-ink">
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">1. Use of this website</h2>
-            <p className="mt-2">
-              This website provides information about the academy's courses and services, and a portal for enrolled
-              students and staff. Content may not be reproduced without permission.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">2. Admissions and schedules</h2>
-            <p className="mt-2">
-              Course availability, batch timings and fees are confirmed at the academy office. Information on this
-              website is indicative and updated by the academy team.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">3. Student accounts</h2>
-            <p className="mt-2">
-              Student portal accounts are created by the academy. Keep your password confidential; you are
-              responsible for activity under your account. Accounts may be deactivated by the academy.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">4. Published results</h2>
-            <p className="mt-2">
-              Student achievements and testimonials are published only with the student's consent. Results published
-              on this site reflect academy records.
-            </p>
-          </div>
-          <div>
-            <h2 className="font-display text-lg font-bold text-navy">5. Contact</h2>
-            <p className="mt-2">Questions about these terms can be sent via the Contact page.</p>
-          </div>
-        </div>
-      </div>
-    </Section>
+    <LegalDoc
+      title="Terms of use"
+      intro="By using this website you agree to the points below. They are written to be readable rather than intimidating, and they describe how the site genuinely behaves."
+      links={[
+        { to: "/privacy", label: "Privacy policy" },
+        { to: "/contact", label: "Ask a question" },
+      ]}
+      sections={[
+        {
+          heading: "Using this site",
+          paragraphs: [
+            "You may browse the public pages freely. Do not attempt to break, overload, scrape at scale or gain unauthorised access to the site, its database or its storage. Automated requests that degrade the service for other visitors are not permitted.",
+          ],
+        },
+        {
+          heading: "Accounts and access",
+          paragraphs: [
+            "Creating an account creates a client account with pending access until Arian approves it. Accounts are personal and should not be shared. Arian may approve, suspend, ban or remove any account, for example if it is used to send spam, abuse, or content that is unlawful.",
+            "Admin access is granted only by Arian and is never selectable during sign-up.",
+          ],
+        },
+        {
+          heading: "Messages and submissions",
+          paragraphs: [
+            "Messages you send through the contact form, the sponsorship form or the client dashboard are stored in Arian's inbox. Do not send content that is unlawful, threatening, or that you do not have the right to share. Submissions are validated and rate limited.",
+          ],
+        },
+        {
+          heading: "Sponsorship and commercial terms",
+          paragraphs: [
+            "A sponsorship enquiry is not a booking. Any collaboration, deliverable, fee, timeline and disclosure arrangement is agreed separately in writing between Arian and the brand. Sponsorship enquiries should include your company, campaign objective, preferred platform, budget range and timeline.",
+            "Paid collaborations are disclosed on screen and in the video description.",
+          ],
+        },
+        {
+          heading: "Arian Assistant",
+          paragraphs: [
+            "Arian Assistant is an automated helper built by Arian for this website. It can be wrong or incomplete, and it is not an official statement from Arian. Do not rely on it for commercial decisions, and do not type personal or sensitive information into it. For anything official, use the contact page.",
+          ],
+        },
+        {
+          heading: "Content and intellectual property",
+          paragraphs: [
+            "The words, layout and original artwork of this website belong to Arian. Game names, characters and assets referenced on this site belong to their respective owners.",
+            "This website is an independent fan and creator project. It is not affiliated with, sponsored by, or endorsed by HoYoverse, Kuro Games or any other game publisher. No official logos or copyrighted game artwork are reproduced here without permission; gallery and audio content is uploaded only where Arian holds the rights to publish it.",
+          ],
+        },
+        {
+          heading: "Availability",
+          paragraphs: [
+            "The site is provided as is. Features may change or be unavailable at times, including while content is being updated. Arian is not liable for losses arising from use of the site or reliance on the assistant's answers.",
+          ],
+        },
+        {
+          heading: "Changes",
+          paragraphs: [
+            "These terms may be updated as the site evolves. Continuing to use the site after an update means you accept the current version. For any question about these terms, use the contact form.",
+          ],
+        },
+      ]}
+    />
   );
 }
